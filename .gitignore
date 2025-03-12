@@ -1,0 +1,7 @@
+.venv
+nobilis/__pycache__
+.DS_Store
+bases/__pycache__
+bases/migrations/__pycache__
+waitinglist/__pycache__
+waitinglist/migrations/__pycache__
