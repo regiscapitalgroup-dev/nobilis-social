@@ -5,3 +5,4 @@ bases/__pycache__
 bases/migrations/__pycache__
 waitinglist/__pycache__
 waitinglist/migrations/__pycache__
+api/__pycache__

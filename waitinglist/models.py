@@ -10,4 +10,7 @@ class WaitingList(models.Model):
     occupation = models.CharField(max_length=60, null=True, blank=True, verbose_name="Occupation")
     city = models.CharField(max_length=60, null=True, blank=True, verbose_name="City")
     referenced = models.CharField(max_length=60, null=True, blank=True, verbose_name="Referenced")
-    is_active = models.BooleanField(default=False, verbose_name="Active")
+    status_waiting_list = models.IntegerField(default=0, verbose_name="Status Waiting List")
+
+    def __str__(self):
+        return f"{self.name} {self.lastname}"
