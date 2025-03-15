@@ -1,8 +1,11 @@
 from django.urls import path
-from .views import waitinglistView, waitinglistDetailView
+from .views import WaitingListAPIView, WaitingListDetailAPIView
+from nsocial.views import RegisterView
 
 
 urlpatterns = [ 
-    path('waitinglist/', waitinglistView),
-    path('waitinglist/<int:pk>/', waitinglistDetailView),
+    path('waitinglist/', WaitingListAPIView.as_view()),
+    path('waitinglist/<int:pk>/', WaitingListDetailAPIView.as_view()),
+
+    path('register/', RegisterView.as_view())
 ]
