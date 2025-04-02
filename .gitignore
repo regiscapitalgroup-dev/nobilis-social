@@ -8,3 +8,5 @@ waitinglist/migrations/__pycache__
 api/__pycache__
 nsocial/__pycache__
 nsocial/migrations/__pycache__
+api/migrations/__pycache__
+api/migrations/__pycache__
