@@ -149,3 +149,16 @@ CORS_ALLOW_METHODS = (
 CORS_ALLOW_HEADERS = (
     *default_headers,       
 )
+
+
+# Email configuration settings:
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = '587'
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+
+# Be sure to read the guide in the resources folder of this lecture (SETUP THE EMAIL BACKEND)
+
+
