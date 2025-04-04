@@ -27,7 +27,7 @@ class WaitingList(models.Model):
     impact_maker = models.BooleanField(blank=True, default=False, verbose_name="Impact Maker")
     executive = models.BooleanField(blank=True, default=False, verbose_name="Executive")
     governor = models.BooleanField(blank=True, default=False, verbose_name="Governor")
-    link_verify = models.CharField(max_length=255, null=False, blank=False, default="", verbose_name="Link")
+    link_verify = models.CharField(max_length=255, null=True, blank=True, verbose_name="Link")
     # status
     status_waiting_list = models.IntegerField(default=0, verbose_name="Status Waiting List")
 
