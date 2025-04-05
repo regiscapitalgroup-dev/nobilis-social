@@ -149,6 +149,7 @@ REST_FRAMEWORK = {
     ),
 }
 
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", cast=bool, default=False)
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -164,6 +165,7 @@ CORS_ALLOW_HEADERS = (
     *default_headers,       
 )
 
+APPEND_SLASH=False
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
