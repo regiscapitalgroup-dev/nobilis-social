@@ -1,5 +1,5 @@
 from django.urls import path
-from api.views import WaitingListView, WaitingListDetailView
+from api.views import WaitingListDetailView, WaitingListView
 from nsocial.views import RegisterView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,

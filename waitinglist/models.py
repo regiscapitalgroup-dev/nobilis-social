@@ -1,9 +1,10 @@
 from django.db import models
+from django.utils import timezone
 
 
 class WaitingList(models.Model):
     # screen 1
-    name = models.CharField(max_length=100, null=False, blank=False, verbose_name="Name")
+    first_name = models.CharField(max_length=100, null=False, blank=False, verbose_name="Name")
     last_name = models.CharField(max_length=150, null=False, blank=False, verbose_name="Last Name")
     phone_number = models.CharField(max_length=20, null=False, blank=False, verbose_name="Phone Number")
     email = models.CharField(max_length=25000, null=False, blank=False, verbose_name="E-mail")
@@ -28,8 +29,14 @@ class WaitingList(models.Model):
     executive = models.BooleanField(blank=True, default=False, verbose_name="Executive")
     governor = models.BooleanField(blank=True, default=False, verbose_name="Governor")
     link_verify = models.CharField(max_length=255, null=True, blank=True, verbose_name="Link")
-    # status
+    # status 
+    created_at = models.DateField(auto_now_add=True, verbose_name="Created at")
     status_waiting_list = models.IntegerField(default=0, verbose_name="Status Waiting List")
 
     def __str__(self):
-        return f"{self.name} {self.lastname}"
+        return f"{self.first_name} {self.last_name}"
+    
+    class Meta:
+        verbose_name = "Waiting List"
+        verbose_name_plural = "Waiting Lists"
+        ordering = ['-created_at']
