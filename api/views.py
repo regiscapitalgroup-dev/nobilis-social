@@ -1,4 +1,5 @@
 from waitinglist.models import WaitingList
+from .models import InviteTmpToken
 from api.serializers import WaitingListSerializer, SetNewPasswordSerializer, ChangePasswordSerializer
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -9,6 +10,10 @@ from .paginations import CustomPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.core.mail import send_mail
 from django.conf import settings
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.sites.shortcuts import get_current_site
+from django.urls import reverse
+import requests
 
 
 class WaitingListView(APIView):
@@ -43,19 +48,32 @@ class WaitingListDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class WaitingListInviteView(APIView):
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
     
     def put(self, request, pk):
         waitinglist = WaitingList.objects.get(pk=pk)
         if waitinglist:
+            user = get_user_model()
             reciber_email = waitinglist.email
             waitinglist.status_waiting_list = 1
             waitinglist.save(update_fields=['status_waiting_list'])
+
+            new_user = user.objects.get(email=reciber_email)
+
+            if new_user:
+                token = RefreshToken.for_user(new_user)
+                invite = InviteTmpToken(user_email=reciber_email, user_token=token, user_id=new_user.id)
+                invite.save()
+ 
+            current_site = get_current_site(request).domain
+            # relative_link = reverse('activate-account')
+            absLink = 'http://{}activate-account/{}'.format(current_site, token)
+
             subject = "Invitación a Nobilis"
             message = f"""
                 Te invitamos a la fiesta
                 
-                http://127.0.0.1:8000/api/v1/activate-account/{pk}/
+                {absLink}
                 """
             from_email = settings.EMAIL_HOST_USER
 
@@ -89,12 +107,23 @@ class ChangePasswordView(generics.GenericAPIView):
 class SetNewPasswordView(generics.GenericAPIView):
     serializer_class = SetNewPasswordSerializer
 
-    def put(self, request, pk):
+    def put(self, request):
         new_password = request.data["new_password"]
-        obj = get_user_model().objects.get(pk=pk)
-        if obj:
-            obj.is_active = True
-            obj.set_password(new_password)
-            obj.save(update_fields=['password', 'is_active'])
-            return Response({'success': 'user activation complete'}, status=status.HTTP_200_OK)
-        return Response(status=400)
+        refresh_token = request.data["refresh_token"]
+        print(refresh_token)
+        invite = InviteTmpToken.objects.get(user_token=refresh_token)
+        if invite:
+            print(invite.user_email)
+ 
+            obj = get_user_model().objects.get(email=invite.user_email)
+            if obj:
+                obj.is_active = True
+                obj.set_password(new_password)
+                obj.save(update_fields=['password', 'is_active'])
+                token = RefreshToken.for_user(obj).access_token
+
+                return Response({'success': token}, status=status.HTTP_200_OK)  
+        else:
+            print(invite)
+            print("no existe")
+        return Response(status=status.HTTP_400_BAD_REQUEST)

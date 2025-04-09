@@ -8,15 +8,15 @@ from rest_framework_simplejwt.views import (
 
 
 urlpatterns = [ 
-    path('waitinglist/', WaitingListView.as_view()),
+    path('waitinglist/', WaitingListView.as_view(), name='waitinglist'),
     path('waitinglist/<int:pk>/', WaitingListDetailView.as_view()),
-    path('waitinglist/<int:pk>/invite/', WaitingListInviteView.as_view()),
+    path('waitinglist/invite/<int:pk>/', WaitingListInviteView.as_view()),
     path('users/current/', CurrentUserView.as_view()),
 
     path('change-password/<int:pk>/', ChangePasswordView.as_view()),
-    path('activate-account/<int:pk>/', SetNewPasswordView.as_view()),
+    path('activate-account/', SetNewPasswordView.as_view(), name='activate-account'),
 
-    path('register/', RegisterView.as_view()),
+    # path('register/', RegisterView.as_view()),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),    
 ]

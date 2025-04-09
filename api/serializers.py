@@ -10,6 +10,7 @@ class WaitingListSerializer(serializers.ModelSerializer):
 
 class SetNewPasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(required=True)
+    refresh_token = serializers.CharField(required=True)
 
 
 class ChangePasswordSerializer(serializers.Serializer):
