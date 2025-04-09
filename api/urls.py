@@ -1,6 +1,6 @@
 from django.urls import path
 from api.views import WaitingListDetailView, WaitingListView, SetNewPasswordView, ChangePasswordView, WaitingListInviteView
-from nsocial.views import RegisterView
+from nsocial.views import RegisterView, CurrentUserView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -11,6 +11,7 @@ urlpatterns = [
     path('waitinglist/', WaitingListView.as_view()),
     path('waitinglist/<int:pk>/', WaitingListDetailView.as_view()),
     path('waitinglist/<int:pk>/invite/', WaitingListInviteView.as_view()),
+    path('users/current/', CurrentUserView.as_view()),
 
     path('change-password/<int:pk>/', ChangePasswordView.as_view()),
     path('activate-account/<int:pk>/', SetNewPasswordView.as_view()),
