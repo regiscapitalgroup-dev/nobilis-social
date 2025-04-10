@@ -16,3 +16,7 @@ class SetNewPasswordSerializer(serializers.Serializer):
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True)
+
+
+class TokenSerializer(serializers.Serializer):
+    token = serializers.TimeField(required=True)

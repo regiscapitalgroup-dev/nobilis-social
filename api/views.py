@@ -1,6 +1,6 @@
 from waitinglist.models import WaitingList
 from .models import InviteTmpToken
-from api.serializers import WaitingListSerializer, SetNewPasswordSerializer, ChangePasswordSerializer
+from api.serializers import WaitingListSerializer, SetNewPasswordSerializer, ChangePasswordSerializer, TokenSerializer
 from rest_framework import generics, status
 from rest_framework.response import Response
 from djangorestframework_camel_case.parser import CamelCaseJSONParser
@@ -115,14 +115,17 @@ class SetNewPasswordView(generics.GenericAPIView):
         if invite:
             print(invite.user_email)
  
-            obj = get_user_model().objects.get(email=invite.user_email)
-            if obj:
-                obj.is_active = True
-                obj.set_password(new_password)
-                obj.save(update_fields=['password', 'is_active'])
-                token = RefreshToken.for_user(obj).access_token
+            obj = get_user_model()
+            user = obj.objects.get(email=invite.user_email)
+            if user:
+                user.is_active = True
+                user.set_password(new_password)
+                user.save(update_fields=['password', 'is_active'])
+                token = RefreshToken.for_user(user).access_token
 
-                return Response({'success': token}, status=status.HTTP_200_OK)  
+                user_token = TokenSerializer(token)
+
+                return Response({'success': user_token.data}, status=status.HTTP_200_OK)  
         else:
             print(invite)
             print("no existe")
