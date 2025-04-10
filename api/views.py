@@ -110,22 +110,20 @@ class SetNewPasswordView(generics.GenericAPIView):
     def put(self, request):
         new_password = request.data["new_password"]
         refresh_token = request.data["refresh_token"]
-        print(refresh_token)
         invite = InviteTmpToken.objects.get(user_token=refresh_token)
         if invite:
-            print(invite.user_email)
- 
             obj = get_user_model()
             user = obj.objects.get(email=invite.user_email)
             if user:
                 user.is_active = True
                 user.set_password(new_password)
                 user.save(update_fields=['password', 'is_active'])
-                token = RefreshToken.for_user(user).access_token
+                
+                data = {'email': invite.user_email, 'password': new_password}
 
-                user_token = TokenSerializer(token)
-
-                return Response({'success': user_token.data}, status=status.HTTP_200_OK)  
+                r = requests.post('http://localhost:8000/api/v1/token/', data=data) 
+                if r.status_code == 200:
+                    return Response(r.json(), status=status.HTTP_200_OK)  
         else:
             print(invite)
             print("no existe")
