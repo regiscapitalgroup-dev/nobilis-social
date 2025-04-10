@@ -57,33 +57,32 @@ class WaitingListInviteView(APIView):
             reciber_email = waitinglist.email
             waitinglist.status_waiting_list = 1
             waitinglist.save(update_fields=['status_waiting_list'])
-
             new_user = user.objects.get(email=reciber_email)
+            if not new_user.is_active:
 
-            if new_user:
                 token = RefreshToken.for_user(new_user)
                 invite = InviteTmpToken(user_email=reciber_email, user_token=token, user_id=new_user.id)
                 invite.save()
- 
-            current_site = get_current_site(request).domain
-            # relative_link = reverse('activate-account')
-            absLink = 'http://{}activate-account/{}'.format(current_site, token)
-
-            subject = "Invitación a Nobilis"
-            message = f"""
-                Te invitamos a la fiesta
-                
-                {absLink}
+                current_site = get_current_site(request).domain
+                # relative_link = reverse('activate-account')
+                absLink = 'http://{}/activate-account/{}'.format(current_site, token)
+                subject = "Invitación a Nobilis"
+                message = f"""
+                    You're invited! :)
+                    
+                    {absLink}
                 """
-            from_email = settings.EMAIL_HOST_USER
+                from_email = settings.EMAIL_HOST_USER
 
-            send_mail(subject=subject, 
-                      message=message, 
-                      from_email=from_email, 
-                      recipient_list=[reciber_email], 
-                      fail_silently=False,
-                      )
-            return Response({'success': 'email was send'}, status=status.HTTP_200_OK)
+                send_mail(subject=subject, 
+                        message=message, 
+                        from_email=from_email, 
+                        recipient_list=[reciber_email], 
+                        fail_silently=False,
+                        )
+                return Response({'success': 'email was send'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'user alredy active'}, status=status.HTTP_303_SEE_OTHER)
         else:
             return Response({'error': 'email was not send'}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -120,11 +119,13 @@ class SetNewPasswordView(generics.GenericAPIView):
                 user.save(update_fields=['password', 'is_active'])
                 
                 data = {'email': invite.user_email, 'password': new_password}
+                current_site = get_current_site(request).domain
+                relative_link = reverse('token_obtain_pair')
 
-                r = requests.post('http://localhost:8000/api/v1/token/', data=data) 
+                r = requests.post(f'http://{current_site}{relative_link}', data=data) 
+                invite.delete()
                 if r.status_code == 200:
                     return Response(r.json(), status=status.HTTP_200_OK)  
         else:
-            print(invite)
-            print("no existe")
+            return Response({'error': 'invalid invitation'}, status=status.HTTP_403_FORBIDDEN)
         return Response(status=status.HTTP_400_BAD_REQUEST)
