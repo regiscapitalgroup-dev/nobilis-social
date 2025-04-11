@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'waitinglist',
     'api',
     'nsocial',
+    'membership'
 ]
 
 MIDDLEWARE = [

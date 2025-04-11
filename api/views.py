@@ -1,6 +1,6 @@
 from waitinglist.models import WaitingList
-from .models import InviteTmpToken
-from api.serializers import WaitingListSerializer, SetNewPasswordSerializer, ChangePasswordSerializer, TokenSerializer
+from api.models import InviteTmpToken
+from api.serializers import WaitingListSerializer, SetNewPasswordSerializer, ChangePasswordSerializer, TokenSerializer, MembershipPlanSerializer
 from rest_framework import generics, status
 from rest_framework.response import Response
 from djangorestframework_camel_case.parser import CamelCaseJSONParser
@@ -49,7 +49,7 @@ class WaitingListDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class WaitingListInviteView(APIView):
     #permission_classes = [IsAuthenticated]
-    
+
     def put(self, request, pk):
         waitinglist = WaitingList.objects.get(pk=pk)
         if waitinglist:

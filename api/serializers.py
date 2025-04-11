@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from waitinglist.models import WaitingList
-
+from membership.models import MembershipPlan
 
 class WaitingListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -20,3 +20,9 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class TokenSerializer(serializers.Serializer):
     token = serializers.TimeField(required=True)
+
+
+class MembershipPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MembershipPlan
+        fields = '__all__'
