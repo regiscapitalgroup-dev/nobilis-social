@@ -1,6 +1,6 @@
 from django.urls import path
-from api.views import (WaitingListDetailView, WaitingListView, SetNewPasswordView, ChangePasswordView, 
-                     WaitingListInviteView)
+from waitinglist.views import WaitingListDetailView, WaitingListInviteView, WaitingListView
+from nsocial.views import ChangePasswordView, SetNewPasswordView
 from membership.views import MembershipPlanView, MembershipPlanDetail
 from nsocial.views import RegisterView, CurrentUserView
 from rest_framework_simplejwt.views import (
