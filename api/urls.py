@@ -1,7 +1,7 @@
 from django.urls import path
 from waitinglist.views import WaitingListDetailView, WaitingListInviteView, WaitingListView
 from nsocial.views import ChangePasswordView, SetNewPasswordView
-from membership.views import MembershipPlanView, MembershipPlanDetail
+from membership.views import MembershipPlanView, MembershipPlanDetail, SuscriptionView, SuscriptionDetailView
 from nsocial.views import RegisterView, CurrentUserView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -20,6 +20,8 @@ urlpatterns = [
 
     path('membership/', MembershipPlanView.as_view(), name='membership'),
     path('membership/<int:pk>/', MembershipPlanDetail.as_view(), name='membership-detail'),
+    path('suscription/', SuscriptionView.as_view(), name='suscription'),
+    path('suscription/<int:pk>/', SuscriptionDetailView.as_view(), name='suscription-detail'), 
     
     # path('register/', RegisterView.as_view()),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

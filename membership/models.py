@@ -31,3 +31,7 @@ class Suscription(models.Model):
 
     def __str__(self) -> str:
         return f'{self.suscriber_name} - {self.plan}'
+
+
+class Credits(models.Model):
+    pass
