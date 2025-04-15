@@ -73,6 +73,9 @@ class WaitingListInviteView(APIView):
                 """
                 from_email = settings.EMAIL_HOST_USER
 
+                if settings.DEBUG:
+                    print(token)
+
                 send_mail(subject=subject, 
                         message=message, 
                         from_email=from_email, 
