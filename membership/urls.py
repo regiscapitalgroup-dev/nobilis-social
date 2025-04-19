@@ -1,9 +1,10 @@
 from django.urls import path
-from .views import PlanListView, CreateSubscriptionView, stripe_webhook_view, SubscriptionDetailView
+from .views import ListAvailablePlansView, CreateSubscriptionView, StripeWebhookView, CancelSubscriptionView, SubscriptionStatusView
 
 urlpatterns = [
-    path('plans/', PlanListView.as_view(), name='plan-list'),
+    path('plans/', ListAvailablePlansView.as_view(), name='price-list'),
     path('subscriptions/create/', CreateSubscriptionView.as_view(), name='create-subscription'),
-    path('subscriptions/me/', SubscriptionDetailView.as_view(), name='user-subscription'),
-    path('stripe/webhook/', stripe_webhook_view, name='stripe-webhook'),
+    path('subscriptions/status/', SubscriptionStatusView.as_view(), name='subscription-status'),
+    path('subscriptions/cancel/', CancelSubscriptionView.as_view(), name='cancel-subscription'),
+    path('stripe/webhook/', StripeWebhookView.as_view(), name='stripe-webhook'),
 ]

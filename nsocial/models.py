@@ -1,7 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils import timezone
-from . managers import CustomUserManager
+from nsocial.managers import CustomUserManager
+import datetime
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -27,16 +28,47 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = 'Users'
 
 
-"""
+
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='profile')
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
+    stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True) # El ID del PM por defecto
+    subscription_status = models.CharField(max_length=20, blank=True, null=True) # ej: active, trialing, past_due, canceled
+    subscription_current_period_end = models.DateTimeField(blank=True, null=True)
+    cancel_at_period_end = models.BooleanField(default=False)
+    card_brand = models.CharField(max_length=50, blank=True, null=True)
+    card_last4 = models.CharField(max_length=4, blank=True, null=True)    
     bio = models.TextField(blank=True)
     profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics')
 
     def __str__(self):
         return f'{self.user.username} Profile'
+    
+    def update_subscription_details(self, stripe_subscription):
+        self.stripe_subscription_id = stripe_subscription.id
+        self.subscription_status = stripe_subscription.status
+        self.cancel_at_period_end = stripe_subscription.cancel_at_period_end
+        try:
+            # Convertir timestamp de Stripe a DateTime de Django con timezone
+            self.subscription_current_period_end = datetime.datetime.fromtimestamp(
+                stripe_subscription.current_period_end,
+                tz=datetime.timezone.utc
+            )
+        except (TypeError, ValueError):
+             self.subscription_current_period_end = None
+        # Podrías añadir lógica para actualizar el plan aquí si es necesario
+        self.save()
 
+    # Método helper para limpiar datos al cancelar/eliminar
+    def clear_subscription_details(self):
+         self.stripe_subscription_id = None
+         self.subscription_status = 'canceled' # O 'expired', 'deleted'
+         self.subscription_current_period_end = None
+         self.cancel_at_period_end = False
+         self.save()    
 
+"""
 
 class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

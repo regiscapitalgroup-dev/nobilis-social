@@ -12,3 +12,4 @@ api/migrations/__pycache__
 api/migrations/__pycache__
 membership/__pycache__
 membership/migrations/__pycache__
+.idea
