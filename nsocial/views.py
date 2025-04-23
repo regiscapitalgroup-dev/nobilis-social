@@ -1,8 +1,8 @@
 from api.models import InviteTmpToken
-from .serializers import CustomUserSerializer, CurrentUserSerializer
-from .models import CustomUser
+from .serializers import CustomUserSerializer, CurrentUserSerializer, UserProfileSerializer
+from .models import CustomUser, UserProfile
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
 import requests
 from django.urls import reverse
@@ -66,3 +66,24 @@ class SetNewPasswordView(generics.GenericAPIView):
             return Response({'error': 'invalid invitation'}, status=status.HTTP_403_FORBIDDEN)
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    queryset = UserProfile.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        try:
+            obj = UserProfile.objects.get(user=self.request.user)
+            self.check_object_permissions(self.request, obj)
+            return obj
+        except UserProfile.DoesNotExist:
+            from django.http import Http404
+            raise Http404
+        
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            response.data = {"message":"Profile updated successful."}
+        return response
+   

@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils import timezone
 from nsocial.managers import CustomUserManager
 import datetime
+from django.conf import settings
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -13,7 +14,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False, verbose_name='Is Staff')
     is_active = models.BooleanField(default=True, verbose_name='Is Active')
     date_joined = models.DateTimeField(default=timezone.now, verbose_name='Date Joined')
-    paid_until = models.DateTimeField(null=True, blank=True, verbose_name='Paid Until')
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
@@ -28,45 +28,53 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = 'Users'
 
 
-
 class UserProfile(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='profile')
-    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True) # El ID del PM por defecto
-    subscription_status = models.CharField(max_length=20, blank=True, null=True) # ej: active, trialing, past_due, canceled
-    subscription_current_period_end = models.DateTimeField(blank=True, null=True)
-    cancel_at_period_end = models.BooleanField(default=False)
-    card_brand = models.CharField(max_length=50, blank=True, null=True)
-    card_last4 = models.CharField(max_length=4, blank=True, null=True)    
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    # ... otros campos como bio, profile_picture, dirección ...
     bio = models.TextField(blank=True)
     profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics')
+    street = models.CharField(max_length=200, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    postal_code = models.CharField(max_length=10, null=True, blank=True)
+    country = models.CharField(max_length=150, null=True, blank=True)
+    # --- Campos relacionados con Stripe ---
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+    # --- Campos de Suscripción (actualizados por webhooks/API) ---
+    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True) # ID de la suscripción activa/relevante
+    subscription_status = models.CharField(max_length=20, blank=True, null=True) # ej: active, trialing, past_due, canceled
+    subscription_current_period_end = models.DateTimeField(blank=True, null=True) # Fecha fin periodo actual (UTC)
+    cancel_at_period_end = models.BooleanField(default=False)
+    # --- Campos de Método de Pago Predeterminado (actualizados por API/webhooks) ---
+    stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True) # El ID del PM por defecto
+    card_brand = models.CharField(max_length=50, blank=True, null=True)
+    card_last4 = models.CharField(max_length=4, blank=True, null=True)
 
     def __str__(self):
         return f'{self.user.username} Profile'
-    
+
+    # --- Métodos Helper (útiles para webhooks y esta vista) ---
     def update_subscription_details(self, stripe_subscription):
+        """Actualiza campos locales desde un objeto Subscription de Stripe."""
         self.stripe_subscription_id = stripe_subscription.id
         self.subscription_status = stripe_subscription.status
         self.cancel_at_period_end = stripe_subscription.cancel_at_period_end
         try:
-            # Convertir timestamp de Stripe a DateTime de Django con timezone
             self.subscription_current_period_end = datetime.datetime.fromtimestamp(
-                stripe_subscription.current_period_end,
-                tz=datetime.timezone.utc
+                stripe_subscription.current_period_end, tz=datetime.timezone.utc
             )
         except (TypeError, ValueError):
              self.subscription_current_period_end = None
-        # Podrías añadir lógica para actualizar el plan aquí si es necesario
+        # Podrías añadir lógica para plan_id si lo necesitas
         self.save()
 
-    # Método helper para limpiar datos al cancelar/eliminar
     def clear_subscription_details(self):
+         """Limpia campos cuando una suscripción se cancela/elimina."""
          self.stripe_subscription_id = None
-         self.subscription_status = 'canceled' # O 'expired', 'deleted'
+         # Decide qué estado poner: 'canceled', 'deleted', None?
+         self.subscription_status = 'canceled'
          self.subscription_current_period_end = None
          self.cancel_at_period_end = False
-         self.save()    
+         self.save()
 
 """
 

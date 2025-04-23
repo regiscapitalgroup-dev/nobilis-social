@@ -1,9 +1,10 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from membership.models import Plan, Subscription
+from membership.models import Plan 
 from django.utils.decorators import method_decorator
-from membership.serializers import PriceSerializer, SubscriptionCreateSerializer, SubscriptionSerializer, SubscriptionStatusSerializer
+from membership.serializers import (PriceSerializer, SubscriptionCreateSerializer, 
+                                    SubscriptionStatusSerializer, PlanNobilisSerializer)
 from nsocial.models import UserProfile
 from django.conf import settings
 from django.shortcuts import get_object_or_404
@@ -16,6 +17,7 @@ from django.conf import settings
 
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+logger = logging.getLogger(__name__)
 
 
 class ListAvailablePlansView(APIView):
@@ -54,7 +56,7 @@ class ListAvailablePlansView(APIView):
                 {"error": "Ocurrió un error inesperado."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
+
 
 class CreateSubscriptionView(APIView):
     """
@@ -75,6 +77,16 @@ class CreateSubscriptionView(APIView):
         user = request.user
 
         try:
+            # 0. Verificar que el método de pago existe en Stripe
+            try:
+                payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+            except stripe.error.InvalidRequestError as e:
+                logger.error(f"Error: Método de pago no encontrado: {payment_method_id}. Error: {e}")
+                return Response(
+                    {"error": f"El método de pago proporcionado no existe o no es válido: {str(e)}", "code": e.code},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # 1. Obtener el perfil del usuario
             profile = get_object_or_404(UserProfile, user=user)
             customer_id = profile.stripe_customer_id
@@ -136,7 +148,8 @@ class CreateSubscriptionView(APIView):
                 subscription = stripe.Subscription.create(
                     customer=customer_id,
                     items=[{'price': price_id}],
-                    expand=['latest_invoice.payment_intent'],
+                    # expand=['latest_invoice.payment_intent'],
+                    expand=['latest_invoice']
                 )
 
                 # 6. Manejar la respuesta de la suscripción
@@ -144,8 +157,21 @@ class CreateSubscriptionView(APIView):
                     'subscription_id': subscription.id,
                     'status': subscription.status,
                 }
-                if subscription.status == 'incomplete' and subscription.latest_invoice.payment_intent.status == 'requires_action':
-                     response_data['client_secret'] = subscription.latest_invoice.payment_intent.client_secret
+                #if subscription.status == 'incomplete' and subscription.latest_invoice.payment_intent.status == 'requires_action':
+                #     response_data['client_secret'] = subscription.latest_invoice.payment_intent.client_secret
+
+                # Si expandiste solo 'latest_invoice':
+                if hasattr(subscription, 'latest_invoice') and subscription.latest_invoice and hasattr(subscription.latest_invoice, 'payment_intent') and subscription.latest_invoice.payment_intent:
+                     # Solo intenta acceder si la estructura existe
+                     payment_intent_status = getattr(stripe.PaymentIntent.retrieve(subscription.latest_invoice.payment_intent), 'status', None) # Recuperar explícitamente si es necesario
+                     if subscription.status == 'incomplete' and payment_intent_status == 'requires_action':
+                           # Necesitas el client_secret del PaymentIntent, no está directamente aquí
+                           # Recupera el PI completo:
+                           try:
+                               pi = stripe.PaymentIntent.retrieve(subscription.latest_invoice.payment_intent)
+                               response_data['client_secret'] = pi.client_secret
+                           except stripe.error.StripeError as pi_error:
+                                logger.error(f"Error recuperando PaymentIntent {subscription.latest_invoice.payment_intent} para SCA: {pi_error}")
 
                 # Actualizar perfil local con datos de la suscripción creada
                 profile.stripe_subscription_id = subscription.id
@@ -166,77 +192,6 @@ class CreateSubscriptionView(APIView):
             logger.error(f"Error inesperado en CreateSubscriptionView para user {user.id}: {e}", exc_info=True)
             return Response({"error": "Ocurrió un error inesperado."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-class SubscriptionStatusView(APIView):
-    """
-    Obtiene el estado de la suscripción activa o de prueba del usuario actual.
-    """
-    permission_classes = [permissions.IsAuthenticated] # Requiere que el usuario esté logueado
-
-    def get(self, request, *args, **kwargs):
-        user = request.user
-        try:
-            # 1. Obtener el perfil del usuario y su stripe_customer_id
-            profile = get_object_or_404(UserProfile, user=user)
-            customer_id = profile.stripe_customer_id
-
-            if not customer_id:
-                # Si no hay customer_id, el usuario nunca inició un proceso de pago/suscripción
-                return Response({"status": "no_customer_id", "message": "Usuario no encontrado en Stripe."}, status=status.HTTP_404_NOT_FOUND)
-
-            # 2. Buscar suscripciones del cliente en Stripe
-            # Buscamos todas para poder determinar el estado más relevante
-            # Expandimos el plan (precio + producto) y el método de pago por defecto
-            subscriptions = stripe.Subscription.list(
-                customer=customer_id,
-                status='all', # Obtenemos todas para filtrar luego
-                expand=[
-                    'data.plan.product',
-                    'data.default_payment_method' # Opcional: info de la tarjeta usada
-                ],
-                limit=10 # Limita por si acaso, usualmente un usuario tiene pocas
-            )
-
-            # 3. Filtrar y seleccionar la suscripción relevante
-            active_subscription = None
-            relevant_subscription_data = None
-
-            # Prioridad: Activa o en Prueba
-            for sub in subscriptions.data:
-                if sub.status in ['active', 'trialing']:
-                    active_subscription = sub
-                    break # Encontramos la más importante
-
-            if active_subscription:
-                serializer = SubscriptionStatusSerializer(active_subscription)
-                relevant_subscription_data = serializer.data
-                # Añadimos un campo extra para claridad en el frontend
-                relevant_subscription_data['effective_status'] = active_subscription.status
-            else:
-                # Si no hay activa/prueba, podríamos opcionalmente buscar la última cancelada/incompleta
-                # para dar contexto, o simplemente decir que no hay suscripción activa.
-                # Por simplicidad, diremos que no hay activa:
-                return Response({"status": "inactive", "message": "No se encontró una suscripción activa o de prueba."}, status=status.HTTP_200_OK)
-
-
-            return Response(relevant_subscription_data, status=status.HTTP_200_OK)
-
-        except UserProfile.DoesNotExist:
-             return Response({"status": "no_profile", "message": "Perfil de usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
-        except stripe.error.StripeError as e:
-            # Manejo de errores de Stripe
-            # Podría ser 'customer not found' si el ID es inválido/antiguo
-            return Response(
-                {"error": f"Error al obtener estado de Stripe: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR # O un código más específico
-            )
-        except Exception as e:
-            # Manejo de otros errores
-            # Loggear el error
-            return Response(
-                {"error": "Ocurrió un error inesperado."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
         
 class CancelSubscriptionView(APIView):
     """
@@ -329,20 +284,81 @@ class CancelSubscriptionView(APIView):
             )
         
 
-class SubscriptionDetailView(generics.RetrieveAPIView):
-    serializer_class = SubscriptionSerializer
+class SubscriptionStatusView(APIView):
+    """
+    Obtiene el estado y detalle actual de la suscripción del usuario
+    consultando a Stripe con el ID almacenado localmente.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-            subscriptions = Subscription.objects.filter(user=request.user)
-            if subscriptions.exists():
-                serializer = self.serializer_class(subscriptions.first())
-                return Response(serializer.data)
-            else:
-                return Response({'detail': 'No subscription found for this user.'}, status=status.HTTP_404_NOT_FOUND)
-    
+        user = request.user
+        try:
+            # 1. Obtener Perfil y ID de Suscripción Local
+            profile = get_object_or_404(UserProfile, user=user)
+            subscription_id = profile.stripe_subscription_id
 
-logger = logging.getLogger(__name__) # Configura logging en settings.py
+            if not subscription_id:
+                # El usuario no tiene una suscripción registrada localmente
+                return Response({"status": "inactive", "message": "No se encontró registro de suscripción."}, status=status.HTTP_200_OK) # O 404 si prefieres
+
+            # 2. Consultar a Stripe para obtener datos frescos
+            try:
+                stripe_subscription = stripe.Subscription.retrieve(
+                    subscription_id,
+                    # Expandir detalles útiles para mostrar al usuario
+                    expand=[
+                        'plan.product', # Detalles del plan y producto suscrito
+                        'default_payment_method' # Detalles de la tarjeta usada (brand, last4)
+                        ]
+                )
+
+                # 3. (Opcional pero recomendado) Auto-corrección del estado local
+                # Compara datos clave y actualiza si hay discrepancia con Stripe
+                try:
+                    local_period_end_ts = int(profile.subscription_current_period_end.timestamp()) if profile.subscription_current_period_end else None
+
+                    # Obtener de forma segura el current_period_end de Stripe, default a None si no existe
+                    stripe_period_end_ts = getattr(stripe_subscription, 'current_period_end', None)
+                    # Obtener de forma segura el status de Stripe
+                    stripe_status = getattr(stripe_subscription, 'status', None)
+                    # Obtener de forma segura cancel_at_period_end de Stripe
+                    stripe_cancel_at_period_end = getattr(stripe_subscription, 'cancel_at_period_end', False) # Default a False
+
+                    # Comparar campos relevantes, ahora usando las variables seguras
+                    if (profile.subscription_status != stripe_status or
+                        local_period_end_ts != stripe_period_end_ts or
+                        profile.cancel_at_period_end != stripe_cancel_at_period_end):
+                           logger.warning(f"Discrepancia detectada para sub {subscription_id} (User {user.id}). Actualizando perfil local desde Stripe.")
+                           # ¡IMPORTANTE! Asegúrate que el método helper también sea seguro
+                           profile.update_subscription_details(stripe_subscription)
+
+                except Exception as comparison_error:
+                     # Loguear si la comparación o actualización local falla, pero no detener el flujo principal
+                     logger.error(f"Error durante la comparación/actualización local para sub {subscription_id}: {comparison_error}", exc_info=True)
+
+                # 4. Serializar y devolver los datos FRESCOS de Stripe
+                serializer = SubscriptionStatusSerializer(stripe_subscription)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            except stripe.error.InvalidRequestError as e:
+                # El ID de suscripción local es inválido o fue eliminado en Stripe
+                logger.warning(f"Stripe sub retrieve falló para ID local {subscription_id} (User {user.id}): {e}. Limpiando datos locales.")
+                profile.clear_subscription_details() # Limpiar datos locales incorrectos
+                return Response({"status": "inactive", "message": "La suscripción no se encontró en el sistema de facturación."}, status=status.HTTP_404_NOT_FOUND)
+            except stripe.error.StripeError as e:
+                # Otro error de API de Stripe (ej: red, autenticación)
+                logger.error(f"Error de API Stripe recuperando sub {subscription_id} (User {user.id}): {e}", exc_info=True)
+                # Podríamos devolver datos locales como fallback, pero es mejor indicar el error
+                return Response({"error": f"Error al contactar el sistema de facturación: {str(e)}"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        except UserProfile.DoesNotExist:
+             logger.error(f"UserProfile no encontrado para usuario autenticado {user.id}")
+             return Response({"error": "Perfil de usuario no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error inesperado en SubscriptionStatusView para user {user.id}: {e}", exc_info=True)
+            return Response({"error": "Ocurrió un error inesperado."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 # Exime de la verificación CSRF ya que Stripe no enviará un token CSRF
 @method_decorator(csrf_exempt, name='dispatch')
@@ -504,3 +520,101 @@ class StripeWebhookView(APIView):
         # internamente, usualmente devuelves 200 (y logueas el error) a menos
         # que sea un error temporal que Stripe debería reintentar.
         return Response(status=status.HTTP_200_OK)
+
+
+class PlanNobilis(generics.ListAPIView):
+    queryset = Plan.objects.all()
+    serializer_class = PlanNobilisSerializer
+    pagination_class = None
+    permission_classes = [permissions.AllowAny]
+
+
+class AccountOverviewView(APIView):
+    """
+    Devuelve información combinada del usuario autenticado y
+    el estado/detalle actual de su suscripción.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        profile = None # Inicializar perfil
+
+        # 1. Obtener Datos Básicos del Usuario
+        user_data = {
+            'id': user.id,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            # Puedes añadir más campos del User si los necesitas
+        }
+
+        # 2. Obtener Datos de la Suscripción
+        subscription_data = None # Inicializar datos de suscripción
+
+        try:
+            profile = get_object_or_404(UserProfile, user=user)
+            subscription_id = profile.stripe_subscription_id
+
+            if not subscription_id:
+                # No hay ID de suscripción guardado
+                subscription_data = {"status": "inactive", "message": "No subscription found."}
+            else:
+                # Intentar obtener datos frescos de Stripe
+                try:
+                    stripe_subscription = stripe.Subscription.retrieve(
+                        subscription_id,
+                        expand=['plan.product', 'default_payment_method']
+                    )
+
+                    # Opcional: Auto-corrección (como en SubscriptionStatusView)
+                    # ... (código de comparación y llamada a profile.update_subscription_details) ...
+                    local_period_end_ts = int(profile.subscription_current_period_end.timestamp()) if profile.subscription_current_period_end else None
+                    stripe_period_end_ts = getattr(stripe_subscription, 'current_period_end', None)
+                    stripe_status = getattr(stripe_subscription, 'status', None)
+                    stripe_cancel_at_period_end = getattr(stripe_subscription, 'cancel_at_period_end', False)
+
+                    if (profile.subscription_status != stripe_status or
+                        local_period_end_ts != stripe_period_end_ts or
+                        profile.cancel_at_period_end != stripe_cancel_at_period_end):
+                           logger.warning(f"Discrepancia detectada en overview para sub {subscription_id}. Actualizando perfil.")
+                           profile.update_subscription_details(stripe_subscription)
+
+
+                    # Serializar los datos frescos de Stripe
+                    serializer = SubscriptionStatusSerializer(stripe_subscription)
+                    subscription_data = serializer.data
+
+                except stripe.error.InvalidRequestError as e:
+                    # ID local es inválido/eliminado en Stripe
+                    logger.warning(f"Stripe sub retrieve falló en overview para ID local {subscription_id} (User {user.id}): {e}. Limpiando datos locales.")
+                    if profile: # Asegurarse que tenemos perfil antes de limpiar
+                       profile.clear_subscription_details()
+                    subscription_data = {"status": "inactive", "message": "Subscription reference invalid."}
+                except stripe.error.StripeError as e:
+                    # Otro error de Stripe API
+                    logger.error(f"Error de API Stripe recuperando sub {subscription_id} en overview (User {user.id}): {e}", exc_info=True)
+                    # Decidir qué devolver: ¿error? ¿datos locales? ¿null?
+                    # Devolver null o un estado de error es más seguro que datos locales potencialmente desactualizados.
+                    subscription_data = {"status": "error", "message": "Could not retrieve subscription details."}
+
+
+        except UserProfile.DoesNotExist:
+             # Si el perfil no existe, no podemos obtener datos de suscripción
+             logger.error(f"UserProfile no encontrado para usuario autenticado {user.id} en overview")
+             subscription_data = {"status": "error", "message": "User profile not found."}
+        except Exception as e:
+            # Error inesperado obteniendo perfil o procesando
+            logger.error(f"Error inesperado en AccountOverviewView para user {user.id}: {e}", exc_info=True)
+            # Podríamos devolver un error 500 aquí, o intentar devolver al menos los datos del usuario
+            subscription_data = {"status": "error", "message": "An unexpected error occurred."}
+            # Considera devolver un Response de error aquí si es grave
+
+
+        # 3. Combinar y Devolver Respuesta
+        response_data = {
+            "user": user_data,
+            "subscription": subscription_data # Será el objeto serializado o un estado/mensaje
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)

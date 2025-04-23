@@ -8,11 +8,12 @@ class Plan(models.Model):
     price_year = models.CharField(max_length=50, verbose_name="Annual Price")
     description = models.CharField(max_length=100, verbose_name="Description")
     stripe_plan_id = models.CharField(max_length=255, unique=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    # price = models.DecimalField(max_digits=10, decimal_places=2)
+    price_str = models.CharField(max_length=30, null=False, blank=True)
     interval = models.CharField(max_length=20, choices=[
         ('month', 'Monthly'),
         ('year', 'Yearly'),
-    ])    
+    ], null=True, blank=True)    
     price_description = models.CharField(max_length=100, verbose_name="Price Description")
     features = models.JSONField(verbose_name="Features")
     requirements = models.JSONField(verbose_name="Requirements")
@@ -25,7 +26,7 @@ class Plan(models.Model):
         return self.title
 
 
-class Subscription(models.Model):
+"""class Subscription(models.Model):
     subscriber_name = models.CharField(max_length=250)
     plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
     is_active = models.BooleanField(default=False)
@@ -36,7 +37,7 @@ class Subscription(models.Model):
     end_date = models.DateTimeField(null=True)
 
     def __str__(self) -> str:
-        return f'{self.subscriber_name} - {self.plan.title} ({self.status})'
+        return f'{self.subscriber_name} - {self.plan.title} ({self.status})'"""
 
 
 class Credits(models.Model):

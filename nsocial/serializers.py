@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser
+from nsocial.models import CustomUser, UserProfile
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -33,3 +33,12 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class TokenSerializer(serializers.Serializer):
     token = serializers.TimeField(required=True)
+
+
+class UserProfileSerializer(serializers.Serializer):
+    class Meta:
+        model = UserProfile
+        fields = ['id', 'bio', 'profile_picture', 'street', 'city', 'country']
+
+
+        
