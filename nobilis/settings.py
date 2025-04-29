@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+import dj_database_url
+from django.core.management.utils import get_random_secret_key
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,12 +24,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#0*^a(3$_ss636f2x^vub*i#jpcp@9f=$6a&1*bfj2vtw&z8^t'
+SECRET_KEY = config("DJANGO_SECRET_KEY", cast=str, default=get_random_secret_key())
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config("DJANGO_DEBUG", cast=bool, default=True)
 
-ALLOWED_HOSTS = ['*']
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [
+        'localhost',
+        '127.0.0.1',
+        'https://nobilis-social-4374f7463e87.herokuapp.com',
+    ]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://nobilis-social-4374f7463e87.herokuapp.com',
+]
 
 
 # Application definition
@@ -86,10 +99,11 @@ WSGI_APPLICATION = 'nobilis.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+  'default': dj_database_url.config(
+      default=config('DATABASE_URL'), 
+      conn_max_age=600, 
+      conn_health_checks=True,
+    )
 }
 
 
@@ -117,7 +131,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'America/Mazatlan'
+TIME_ZONE = 'America/Monterrey'
 
 USE_I18N = True
 
@@ -173,7 +187,7 @@ REST_FRAMEWORK = {
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", cast=bool, default=False)
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    config("CORS_ALLOWED_ORIGINS"),
 ]
 
 from corsheaders.defaults import default_methods, default_headers
