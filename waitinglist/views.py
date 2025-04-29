@@ -62,10 +62,10 @@ class WaitingListInviteView(APIView):
                 token = RefreshToken.for_user(new_user)
                 invite = InviteTmpToken(user_email=reciber_email, user_token=token, user_id=new_user.id)
                 invite.save()
-                current_site = get_current_site(request).domain
+                current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth' #get_current_site(request).domain
                 # relative_link = reverse('activate-account')
                 absLink = 'http://{}/activate-account/{}'.format(current_site, token)
-                subject = "Invitación a Nobilis"
+                subject = "Nobilis Invitation"
                 message = f"""
                     You're invited! :)
                     
