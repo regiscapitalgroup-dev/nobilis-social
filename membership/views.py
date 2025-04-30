@@ -300,7 +300,7 @@ class SubscriptionStatusView(APIView):
 
             if not subscription_id:
                 # El usuario no tiene una suscripción registrada localmente
-                return Response({"status": "inactive", "message": "No se encontró registro de suscripción."}, status=status.HTTP_200_OK) # O 404 si prefieres
+                return Response({"status": None, "message": "No se encontró registro de suscripción."}, status=status.HTTP_200_OK) # O 404 si prefieres
 
             # 2. Consultar a Stripe para obtener datos frescos
             try:
