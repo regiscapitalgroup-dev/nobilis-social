@@ -36,10 +36,12 @@ else:
         'localhost',
         '127.0.0.1',
         'https://nobilis-social-4374f7463e87.herokuapp.com',
+        'https://main.d1rykkcgalxqn2.amplifyapp.com',
     ]
 
 CSRF_TRUSTED_ORIGINS = [
     'https://nobilis-social-4374f7463e87.herokuapp.com',
+    'https://main.d1rykkcgalxqn2.amplifyapp.com',
 ]
 
 
