@@ -558,7 +558,7 @@ class AccountOverviewView(APIView):
 
             if not subscription_id:
                 # No hay ID de suscripción guardado
-                subscription_data = {"status": "inactive", "message": "No subscription found."}
+                subscription_data = {"status": None, "message": "No subscription found."}
             else:
                 # Intentar obtener datos frescos de Stripe
                 try:
