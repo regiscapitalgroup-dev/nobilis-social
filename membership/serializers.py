@@ -2,6 +2,7 @@ from rest_framework import serializers
 from membership.models import Plan 
 import datetime
 import logging # Para logs en to_representation si es necesario
+import stripe
 
 logger = logging.getLogger(__name__)
 
