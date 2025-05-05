@@ -29,13 +29,16 @@ class WaitingListView(APIView):
         serializer = WaitingListSerializer(data=request.data)
         if serializer.is_valid():
             user = get_user_model()
-            new_user = user.objects.create(email=serializer.validated_data["email"], 
+            if not user.objects.get(email=serializer.validated_data["email"]):
+                new_user = user.objects.create(email=serializer.validated_data["email"], 
                                            first_name=serializer.validated_data["first_name"], 
                                            last_name=serializer.validated_data["last_name"],
                                            is_active=False)
-            new_user.set_password('secret')
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+                new_user.set_password('secret')
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response({'error': 'User already exists.'}, status=status.HTTP_409_CONFLICT)
+         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
     
 
@@ -64,7 +67,8 @@ class WaitingListInviteView(APIView):
                 invite.save()
                 current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth' #get_current_site(request).domain
                 # relative_link = reverse('activate-account')
-                absLink = 'http://{}/activate-account/{}'.format(current_site, token)
+                # absLink = 'http://{}/activate-account/{}'.format(current_site, token)
+                absLink = '{}/activate-account/{}'.format(current_site, token)
                 subject = "Nobilis Invitation"
                 message = f"""
                     You're invited! :)
