@@ -1,5 +1,5 @@
 from django.urls import path, include
-from waitinglist.views import WaitingListDetailView, WaitingListInviteView, WaitingListView
+from waitinglist.views import WaitingListDetailView, WaitingListInviteView, WaitingListView, UserExistsView
 from nsocial.views import ChangePasswordView, SetNewPasswordView
 #from membership.views import MembershipPlanView, MembershipPlanDetail, SuscriptionView, SuscriptionDetailView
 from nsocial.views import RegisterView, CurrentUserView
@@ -14,6 +14,7 @@ urlpatterns = [
     path('waitinglist/', WaitingListView.as_view(), name='waitinglist'),
     path('waitinglist/<int:pk>/', WaitingListDetailView.as_view()),
     path('waitinglist/invite/<int:pk>/', WaitingListInviteView.as_view()),
+    path('waitinglist/exists/', UserExistsView.as_view()),
     path('users/current/', AccountOverviewView.as_view()),
 
     path('change-password/<int:pk>/', ChangePasswordView.as_view()),

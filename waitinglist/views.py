@@ -1,5 +1,5 @@
 from waitinglist.models import WaitingList
-from waitinglist.serializers import WaitingListSerializer
+from waitinglist.serializers import WaitingListSerializer, ExistingUserSerializer
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.sites.shortcuts import get_current_site
 from api.models import InviteTmpToken
+from django.core.exceptions import ObjectDoesNotExist
 
 
 class WaitingListView(APIView):
@@ -29,16 +30,13 @@ class WaitingListView(APIView):
         serializer = WaitingListSerializer(data=request.data)
         if serializer.is_valid():
             user = get_user_model()
-            if not user.objects.get(email=serializer.validated_data["email"]):
-                new_user = user.objects.create(email=serializer.validated_data["email"], 
-                                           first_name=serializer.validated_data["first_name"], 
-                                           last_name=serializer.validated_data["last_name"],
-                                           is_active=False)
-                new_user.set_password('secret')
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response({'error': 'User already exists.'}, status=status.HTTP_409_CONFLICT)
-         
+            new_user = user.objects.create(email=serializer.validated_data["email"], 
+                                        first_name=serializer.validated_data["first_name"], 
+                                        last_name=serializer.validated_data["last_name"],
+                                        is_active=False)
+            new_user.set_password('secret')
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
     
 
@@ -61,19 +59,18 @@ class WaitingListInviteView(APIView):
             waitinglist.save(update_fields=['status_waiting_list'])
             new_user = user.objects.get(email=reciber_email)
             if not new_user.is_active:
-
                 token = RefreshToken.for_user(new_user)
                 invite = InviteTmpToken(user_email=reciber_email, user_token=token, user_id=new_user.id)
                 invite.save()
                 current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth' #get_current_site(request).domain
                 # relative_link = reverse('activate-account')
                 # absLink = 'http://{}/activate-account/{}'.format(current_site, token)
-                absLink = '{}/activate-account/{}'.format(current_site, token)
+                abslink = '{}/activate-account/{}'.format(current_site, token)
                 subject = "Nobilis Invitation"
                 message = f"""
                     You're invited! :)
                     
-                    {absLink}
+                    {abslink}
                 """
                 from_email = settings.EMAIL_HOST_USER
 
@@ -91,3 +88,20 @@ class WaitingListInviteView(APIView):
                 return Response({'error': 'user alredy active'}, status=status.HTTP_303_SEE_OTHER)
         else:
             return Response({'error': 'email was not send'}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class UserExistsView(APIView):
+    serializer_class = ExistingUserSerializer
+    permission_classes = [AllowAny]    
+
+    def post(self, request):
+        waitinglist = WaitingList.objects.all()
+        serializer = ExistingUserSerializer(data=request.data)
+        if serializer.is_valid(): 
+            try:
+                user = waitinglist.get(email=serializer.validated_data["email"])
+                if user:
+                    return Response({'error': 'user already exists.'}, status=status.HTTP_409_CONFLICT)
+            except ObjectDoesNotExist:
+                return Response({'message':'user does not exist'}, status=status.HTTP_200_OK)
+        return Response({'error': 'email was not send'}, status=status.HTTP_400_BAD_REQUEST)
