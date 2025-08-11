@@ -5,9 +5,17 @@ from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
 import requests
+from rest_framework.views import APIView
 from django.urls import reverse
-from nsocial.serializers import ChangePasswordSerializer, SetNewPasswordSerializer
+from nsocial.serializers import ChangePasswordSerializer, SetNewPasswordSerializer, PasswordResetConfirmSerializer
 from django.contrib.auth import get_user_model
+from django.contrib.sites.shortcuts import get_current_site
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.contrib.sites.shortcuts import get_current_site
+from django.core.mail import send_mail
+from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 
 
@@ -86,4 +94,66 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         if response.status_code == status.HTTP_200_OK:
             response.data = {"message":"Profile updated successful."}
         return response
-   
+
+
+class ForgotMyPassword(APIView):   
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            return Response({'detail': 'If an account exists with this email, reset instructions will be sent.'}, status=status.HTTP_200_OK)
+        
+        token_generator = PasswordResetTokenGenerator()
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = token_generator.make_token(user)
+        
+        reset_link = f"https://main.d1rykkcgalxqn2.amplifyapp.com/reset-password/{uidb64}/{token}/"
+
+        subject = 'Nobilis: Reset your Password'
+        message = (
+            f"Hello {user.first_name},\n\n"
+            f"Click the link below to reset your password.:\n"
+            f"{reset_link}\n\n"
+            f"If you did not request this, please ignore this email.\n"
+            "The link will expire in 1 hour.\n\n"
+            "Thank You."
+        )
+        try:
+            send_mail(subject, message, settings.ADMIN_USER_EMAIL, [user.email])
+        except Exception as e:
+            print(f"Error sending email: {e}")
+            return Response({'error': 'There was a problem sending the email.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'detail': 'If an account exists with this email, reset instructions will be sent.'}, status=status.HTTP_200_OK)    
+
+
+class PasswordResetConfirmView(APIView):
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            uid = force_str(urlsafe_base64_decode(serializer.validated_data['user']))
+            user = CustomUser.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+            user = None
+
+        token_generator = PasswordResetTokenGenerator()
+        if user is not None and token_generator.check_token(user, serializer.validated_data['token']):
+            p = serializer.validated_data['password']
+            user.set_password(p)
+            user.save()
+
+            data = {"email": user, 'password': p}
+            current_site = get_current_site(request).domain
+            relative_link = reverse('token_obtain_pair')
+            r = requests.post(f'https://{current_site}{relative_link}', data=data) 
+            if r.status_code == 200:
+                return Response(r.json(), status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'The reset link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from nsocial.models import CustomUser, UserProfile
-
+from django.contrib.auth.password_validation import validate_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, style={'input_type': 'password'})
@@ -41,4 +41,15 @@ class UserProfileSerializer(serializers.Serializer):
         fields = ['id', 'bio', 'profile_picture', 'street', 'city', 'country']
 
 
-        
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    user = serializers.CharField(write_only=True, required=True)
+    token = serializers.CharField(write_only=True, required=True)
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password], 
+        style={'input_type': 'password'}
+    )
+
+    def validate(self, attrs):
+        return attrs
