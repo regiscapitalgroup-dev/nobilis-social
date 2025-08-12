@@ -7,10 +7,10 @@ class WaitingList(models.Model):
     first_name = models.CharField(max_length=100, null=False, blank=False, verbose_name="Name")
     last_name = models.CharField(max_length=150, null=False, blank=False, verbose_name="Last Name")
     phone_number = models.CharField(max_length=20, null=False, blank=False, verbose_name="Phone Number")
-    email = models.CharField(max_length=25000, null=False, blank=False, verbose_name="E-mail")
+    email = models.EmailField(max_length=255, null=False, blank=False, verbose_name="E-mail") #.CharField(max_length=25000, null=False, blank=False, verbose_name="E-mail")
     occupation = models.CharField(max_length=60, null=True, blank=True, verbose_name="Occupation")
-    country = models.CharField(max_length=4, null=True, blank=True, verbose_name="Country")
-    referenced = models.CharField(max_length=60, null=True, blank=True, verbose_name="Referenced")
+    city = models.CharField(max_length=255, null=True, blank=True, verbose_name="Country")
+    referenced = models.CharField(max_length=70, null=True, blank=True, verbose_name="Referenced")
     # screen 2
     option0 = models.BooleanField(blank=True, default=False, verbose_name="Engage in a trusted, premium ecosysten tailored to meet your needs")
     option1 = models.BooleanField(blank=True, default=False, verbose_name="Connect with a prestigious global network of ultra-high archievers, like yourself")
