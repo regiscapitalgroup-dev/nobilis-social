@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("DJANGO_SECRET_KEY", cast=str, default=get_random_secret_key())
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config("DJANGO_DEBUG", cast=bool, default=True)
+DEBUG = True #config("DJANGO_DEBUG", cast=bool, default=True)
 
 if DEBUG:
     ALLOWED_HOSTS = ['*']
@@ -100,12 +100,19 @@ WSGI_APPLICATION = 'nobilis.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
+
 DATABASES = {
   'default': dj_database_url.config(
-      default=config('DATABASE_URL'), 
-      conn_max_age=600, 
-      conn_health_checks=True,
-    )
+       default=config('DATABASE_URL'),
+       conn_max_age=600,
+       conn_health_checks=True,
+     )
 }
 
 
@@ -150,6 +157,9 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
@@ -191,7 +201,7 @@ CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", cast=bool, default=Fal
 CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", cast=bool, default=True)
 
 CORS_ALLOWED_ORIGINS = [
-    config("CORS_ALLOWED_ORIGINS"),
+    "http://localhost:3000",
 ]
 
 from corsheaders.defaults import default_methods, default_headers
