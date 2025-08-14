@@ -65,7 +65,7 @@ class WaitingListInviteView(APIView):
                 current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth' #get_current_site(request).domain
                 # relative_link = reverse('activate-account')
                 # absLink = 'http://{}/activate-account/{}'.format(current_site, token)
-                abslink = '{}/activate-account/{}'.format(current_site, token)
+                abslink = '{}/activate-account/{}/{}/'.format(current_site, token, new_user.first_name)
                 subject = "Nobilis Invitation"
                 message = f"""
                     You're invited! :)
