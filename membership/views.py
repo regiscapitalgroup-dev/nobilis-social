@@ -523,10 +523,19 @@ class StripeWebhookView(APIView):
 
 
 class PlanNobilis(generics.ListAPIView):
-    queryset = Plan.objects.all()
+
     serializer_class = PlanNobilisSerializer
-    pagination_class = None
     permission_classes = [permissions.AllowAny]
+
+    def list(self, request, *args, **kwargs):
+        queryset = Plan.objects.all()
+        serializer = self.get_serializer(queryset, many=True)
+        response_data = {
+            'success': 'success',
+            'message': 'list of nobilis plan',
+            'data': serializer.data
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class AccountOverviewView(APIView):

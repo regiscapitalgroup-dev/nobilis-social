@@ -1,17 +1,15 @@
 from waitinglist.models import WaitingList
 from waitinglist.serializers import WaitingListSerializer, ExistingUserSerializer
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
 from api.paginations import CustomPagination
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from django.contrib.auth import get_user_model
+from rest_framework.permissions import AllowAny
+import uuid
 from rest_framework import status, generics
 from djangorestframework_camel_case.parser import CamelCaseJSONParser
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.sites.shortcuts import get_current_site
 from api.models import InviteTmpToken
 from django.core.exceptions import ObjectDoesNotExist
 
@@ -59,12 +57,11 @@ class WaitingListInviteView(APIView):
             waitinglist.save(update_fields=['status_waiting_list'])
             new_user = user.objects.get(email=reciber_email)
             if not new_user.is_active:
-                token = RefreshToken.for_user(new_user)
+                token_uuid = uuid.uuid4()
+                token = token_uuid.hex #RefreshToken.for_user(new_user)
                 invite = InviteTmpToken(user_email=reciber_email, user_token=token, user_id=new_user.id)
                 invite.save()
-                current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth' #get_current_site(request).domain
-                # relative_link = reverse('activate-account')
-                # absLink = 'http://{}/activate-account/{}'.format(current_site, token)
+                current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth'
                 abslink = '{}/activate-account/{}/{}/'.format(current_site, token, new_user.first_name)
                 subject = "Nobilis Invitation"
                 message = f"""
@@ -73,9 +70,6 @@ class WaitingListInviteView(APIView):
                     {abslink}
                 """
                 from_email = settings.EMAIL_HOST_USER
-
-                if settings.DEBUG:
-                    print(token)
 
                 send_mail(subject=subject, 
                         message=message, 
