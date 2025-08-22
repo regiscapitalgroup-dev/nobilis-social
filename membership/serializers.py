@@ -138,6 +138,13 @@ class PlanNobilisSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class PlanNobilisPriceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Plan
+        # Aquí especificamos la lista de campos que queremos mostrar
+        fields = ['id', 'title', 'price_year', 'price_str']
+
+
 class PlanSerializer(serializers.Serializer):
     """ Serializa un objeto Plan (legacy) de Stripe. """
     id = serializers.CharField()

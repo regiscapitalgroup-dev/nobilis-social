@@ -3,10 +3,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from membership.models import Plan 
 from django.utils.decorators import method_decorator
-from membership.serializers import (PriceSerializer, SubscriptionCreateSerializer, 
-                                    SubscriptionStatusSerializer, PlanNobilisSerializer)
+from membership.serializers import (PriceSerializer, SubscriptionCreateSerializer,
+                                    SubscriptionStatusSerializer, PlanNobilisSerializer, PlanNobilisPriceSerializer)
 from nsocial.models import UserProfile
-from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 import logging
@@ -523,7 +522,6 @@ class StripeWebhookView(APIView):
 
 
 class PlanNobilis(generics.ListAPIView):
-
     serializer_class = PlanNobilisSerializer
     permission_classes = [permissions.AllowAny]
 
@@ -531,12 +529,39 @@ class PlanNobilis(generics.ListAPIView):
         queryset = Plan.objects.all()
         serializer = self.get_serializer(queryset, many=True)
         response_data = {
-            'success': 'success',
+            'success': True,
             'message': 'list of nobilis plan',
             'data': serializer.data
         }
         return Response(response_data, status=status.HTTP_200_OK)
 
+
+class PlanDetailView(generics.RetrieveAPIView):
+    queryset = Plan.objects.all()
+    serializer_class = PlanNobilisSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        response_data = {
+            'status': True,
+            'data': serializer.data
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class PlanPricesView(generics.RetrieveAPIView):
+    queryset = Plan.objects.all()
+    serializer_class = PlanNobilisPriceSerializer
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        response_data = {
+            'status': True,
+            'message': 'plan price',
+            'data': serializer.data
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class AccountOverviewView(APIView):
     """

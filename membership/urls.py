@@ -1,11 +1,12 @@
 from django.urls import path
 from membership.views import (ListAvailablePlansView, CreateSubscriptionView, 
                               StripeWebhookView, CancelSubscriptionView, 
-                              SubscriptionStatusView, PlanNobilis, AccountOverviewView)
+                              SubscriptionStatusView, PlanNobilis, AccountOverviewView, PlanPricesView)
 
 urlpatterns = [
     path('stripe/plans/', ListAvailablePlansView.as_view(), name='price-list'),
     path('nobilis/plans/', PlanNobilis.as_view(), name='nobilis-list'),
+    path('nobilis/plans/<int:pk>/', PlanPricesView.as_view(), name='plan-price'),
     path('account/overview/', AccountOverviewView.as_view(), name='account-overview'), # <-- Nueva ruta
     path('subscriptions/create/', CreateSubscriptionView.as_view(), name='create-subscription'),
     path('subscriptions/status/', SubscriptionStatusView.as_view(), name='subscription-status'),
