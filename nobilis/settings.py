@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config("DJANGO_SECRET_KEY", cast=str, default=get_random_secret_key())
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True #config("DJANGO_DEBUG", cast=bool, default=True)
+DEBUG = config("DJANGO_DEBUG", cast=bool, default=True)
 
 if DEBUG:
     ALLOWED_HOSTS = ['*']
@@ -61,7 +61,7 @@ INSTALLED_APPS = [
     'waitinglist',
     'api',
     'nsocial',
-    'membership'
+    'membership',
 ]
 
 MIDDLEWARE = [
@@ -100,20 +100,20 @@ WSGI_APPLICATION = 'nobilis.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-#DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.sqlite3',
-#        'NAME': BASE_DIR / 'db.sqlite3',
-#    }
-#}
-
 DATABASES = {
-  'default': dj_database_url.config(
-       default=config('DATABASE_URL'),
-       conn_max_age=600,
-       conn_health_checks=True,
-     )
+   'default': {
+       'ENGINE': 'django.db.backends.sqlite3',
+       'NAME': BASE_DIR / 'db.sqlite3',
+   }
 }
+
+#DATABASES = {
+#  'default': dj_database_url.config(
+#       default=config('DATABASE_URL'),
+#       conn_max_age=600,
+#       conn_health_checks=True,
+#     )
+#}
 
 
 # Password validation
@@ -156,6 +156,9 @@ STATICFILES_DIRS = [
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
@@ -171,10 +174,26 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+if DEBUG:
+    SECURE_SSL_REDIRECT = False
+else:
+    SECURE_SSL_REDIRECT = True
+
 AUTH_USER_MODEL = 'nsocial.CustomUser'
+
+#SALT_KEY = config("SALT_KEY", cast=str, default=None)
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=2),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+
+    "ALGORITHM": "HS256",
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }
 
 REST_FRAMEWORK = {
@@ -188,7 +207,6 @@ REST_FRAMEWORK = {
         'djangorestframework_camel_case.render.CamelCaseJSONRenderer',
         'djangorestframework_camel_case.render.CamelCaseBrowsableAPIRenderer',
     ),
-
     'DEFAULT_PARSER_CLASSES': (
         'djangorestframework_camel_case.parser.CamelCaseFormParser',
         'djangorestframework_camel_case.parser.CamelCaseMultiPartParser',
@@ -201,7 +219,7 @@ CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", cast=bool, default=Fal
 CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", cast=bool, default=True)
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    'https://main.d1rykkcgalxqn2.amplifyapp.com',
 ]
 
 from corsheaders.defaults import default_methods, default_headers

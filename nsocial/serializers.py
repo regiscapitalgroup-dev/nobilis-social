@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from nsocial.models import CustomUser, UserProfile
+from api.models import LanguageCatalog
 from django.contrib.auth.password_validation import validate_password
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -35,10 +36,25 @@ class TokenSerializer(serializers.Serializer):
     token = serializers.TimeField(required=True)
 
 
-class UserProfileSerializer(serializers.Serializer):
+class UserProfileSerializer(serializers.ModelSerializer):
+    languages = serializers.SlugRelatedField(
+        many=True,
+        queryset=LanguageCatalog.objects.all(),
+        slug_field='name'
+    )
     class Meta:
         model = UserProfile
-        fields = ['id', 'bio', 'profile_picture', 'street', 'city', 'country']
+        fields = [
+            'introduction_headline',
+            'alias_title',
+            'profile_picture',
+            'birthday',
+            'phone_number',
+            'street',
+            'city',
+            'postal_code',
+            'languages'
+        ]
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

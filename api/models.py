@@ -23,3 +23,15 @@ class CityCatalog(models.Model):
     class Meta:
         verbose_name = "City"
         verbose_name_plural = "Cities"
+
+
+class LanguageCatalog(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Language Name")
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Language"
+        verbose_name_plural = "Languages"
+        ordering = ['name']

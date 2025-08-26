@@ -642,10 +642,7 @@ class AccountOverviewView(APIView):
             logger.error(f"Error inesperado en AccountOverviewView para user {user.id}: {e}", exc_info=True)
             # Podríamos devolver un error 500 aquí, o intentar devolver al menos los datos del usuario
             subscription_data = {"status": "error", "message": "An unexpected error occurred."}
-            # Considera devolver un Response de error aquí si es grave
 
-
-        # 3. Combinar y Devolver Respuesta
         response_data = {
             "user": user_data,
             "subscription": subscription_data # Será el objeto serializado o un estado/mensaje

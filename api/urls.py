@@ -1,8 +1,9 @@
 from django.urls import path, include
 from waitinglist.views import WaitingListDetailView, WaitingListInviteView, WaitingListView, UserExistsView
-from nsocial.views import ChangePasswordView, SetNewPasswordView, ForgotMyPassword, PasswordResetConfirmView
+from nsocial.views import (ChangePasswordView, SetNewPasswordView, ForgotMyPassword, PasswordResetConfirmView,
+                           UserProfileView)
 from membership.views import AccountOverviewView
-from api.views import CityListView
+from api.views import CityListView, LanguageListView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -26,4 +27,6 @@ urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('cities/', CityListView.as_view(), name='city-list'),
+    path('languages/', LanguageListView.as_view(), name='language-list'),
+    path('users/profile/', UserProfileView.as_view(), name='user-profile'),
 ]

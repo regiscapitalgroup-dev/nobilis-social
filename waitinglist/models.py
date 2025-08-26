@@ -1,13 +1,13 @@
 from django.db import models
 from django.utils import timezone
 
-
 class WaitingList(models.Model):
     # screen 1
     first_name = models.CharField(max_length=100, null=False, blank=False, verbose_name="Name")
     last_name = models.CharField(max_length=150, null=False, blank=False, verbose_name="Last Name")
     phone_number = models.CharField(max_length=20, null=False, blank=False, verbose_name="Phone Number")
-    email = models.EmailField(max_length=255, null=False, blank=False, verbose_name="E-mail") #.CharField(max_length=25000, null=False, blank=False, verbose_name="E-mail")
+    #phone_number = EncryptedCharField(null=False, blank=False, verbose_name="Phone Number")
+    email = models.EmailField(max_length=255, null=False, blank=False, verbose_name="E-mail") 
     occupation = models.CharField(max_length=60, null=True, blank=True, verbose_name="Occupation")
     city = models.CharField(max_length=255, null=True, blank=True, verbose_name="Country")
     referenced = models.CharField(max_length=70, null=True, blank=True, verbose_name="Referenced")

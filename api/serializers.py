@@ -1,7 +1,5 @@
-# en tu_app/serializers.py
-
 from rest_framework import serializers
-from .models import CityCatalog
+from .models import CityCatalog, LanguageCatalog
 
 
 class CityListSerializer(serializers.BaseSerializer):
@@ -15,3 +13,12 @@ class CityListSerializer(serializers.BaseSerializer):
         parts.append(instance.country)
 
         return ", ".join(parts)
+
+
+class LanguageSerializer(serializers.ModelSerializer):
+    """
+    Serializador para el modelo Language.
+    """
+    class Meta:
+        model = LanguageCatalog
+        fields = ['id', 'name'] # Devolvemos el ID y el nombre

@@ -86,13 +86,20 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
             self.check_object_permissions(self.request, obj)
             return obj
         except UserProfile.DoesNotExist:
-            from django.http import Http404
-            raise Http404
+            #from django.http import Http404
+            #raise Http404
+            return Response({
+                "success": False,
+                "message": "User profile not found."
+            }, status=status.HTTP_404_NOT_FOUND)
         
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
         if response.status_code == status.HTTP_200_OK:
-            response.data = {"message":"Profile updated successful."}
+            response.data = {
+                "success": True,
+                "message": "Profile updated successful."
+            }
         return response
 
 
@@ -126,7 +133,10 @@ class ForgotMyPassword(APIView):
             send_mail(subject, message, settings.ADMIN_USER_EMAIL, [user.email])
         except Exception as e:
             print(f"Error sending email: {e}")
-            return Response({'error': 'There was a problem sending the email.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                "success": False,
+                "message": "There was a problem sending the email."
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({'detail': 'If an account exists with this email, reset instructions will be sent.'}, status=status.HTTP_200_OK)    
 

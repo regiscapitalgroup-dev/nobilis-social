@@ -2,8 +2,17 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils import timezone
 from nsocial.managers import CustomUserManager
+from api.models import LanguageCatalog
 import datetime
 from django.conf import settings
+from django.core.exceptions import ValidationError
+#from encrypted_fields.fields import EncryptedCharField, EncryptedDateField
+
+def validate_image_size(value):
+    filesize = value.size
+    megabyte_limit = 5.0
+    if filesize > megabyte_limit * 1024 * 1024:
+        raise ValidationError("Max file size is %sMB" % str(megabyte_limit))
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -30,27 +39,33 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
-    # ... otros campos como bio, profile_picture, dirección ...
-    bio = models.TextField(blank=True)
-    profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics')
-    street = models.CharField(max_length=200, null=True, blank=True)
-    city = models.CharField(max_length=100, null=True, blank=True)
-    postal_code = models.CharField(max_length=10, null=True, blank=True)
-    country = models.CharField(max_length=150, null=True, blank=True)
-    # --- Campos relacionados con Stripe ---
-    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
+
+    introduction_headline = models.TextField(max_length=220, null=True, blank=True)
+    alias_title = models.CharField(max_length=50, null=True, blank=True)
+    profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics', null=True, blank=True,
+                                        validators=[validate_image_size])
+
+    birthday = models.DateField(null=True, blank=True) #EncryptedDateField(null=True, blank=True) #
+    phone_number = models.CharField(max_length=25, null=True, blank=True) #EncryptedCharField(max_length=50, null=True, blank=True)
+    street = models.CharField(max_length=200, null=True, blank=True) #EncryptedCharField(max_length=250, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True) #EncryptedCharField(max_length=150, null=True, blank=True)
+    postal_code = models.CharField(max_length=10, null=True, blank=True) #EncryptedCharField(max_length=15, null=True, blank=True)
+    #country = models.CharField(max_length=150, null=True, blank=True) #EncryptedCharField(max_length=150, null=True, blank=True)
+    languages = models.ManyToManyField('api.LanguageCatalog', blank=True, related_name='user_profiles')
+
     # --- Campos de Suscripción (actualizados por webhooks/API) ---
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True) # ID de la suscripción activa/relevante
     subscription_status = models.CharField(max_length=20, blank=True, null=True) # ej: active, trialing, past_due, canceled
     subscription_current_period_end = models.DateTimeField(blank=True, null=True) # Fecha fin periodo actual (UTC)
     cancel_at_period_end = models.BooleanField(default=False)
     # --- Campos de Método de Pago Predeterminado (actualizados por API/webhooks) ---
+    stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True) # El ID del PM por defecto
     card_brand = models.CharField(max_length=50, blank=True, null=True)
     card_last4 = models.CharField(max_length=4, blank=True, null=True)
 
     def __str__(self):
-        return f'{self.user.username} Profile'
+        return f'{self.user} Profile'
 
     # --- Métodos Helper (útiles para webhooks y esta vista) ---
     def update_subscription_details(self, stripe_subscription):
@@ -75,43 +90,3 @@ class UserProfile(models.Model):
          self.subscription_current_period_end = None
          self.cancel_at_period_end = False
          self.save()
-
-"""
-
-class Post(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    content = models.TextField()
-    video = models.FileField(upload_to='videos/', null=True, blank=True)
-    image = models.ImageField(upload_to='images/', null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    likes = models.ManyToManyField(User, related_name='likes_posts', through='Like')
-
-    def __str__(self):
-        return f'{self.user.username} Post'
-
-    
-class Like(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-
-class Follow(models.Model):
-    follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='following')
-    following = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followers')
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('follower', 'following')
-
-
-class Comment(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f'{self.user.username} Commented on {self.post.user.username} Post'
-"""    
-    

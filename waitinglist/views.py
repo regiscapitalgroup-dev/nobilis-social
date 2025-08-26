@@ -1,4 +1,5 @@
 from waitinglist.models import WaitingList
+from nsocial.models import UserProfile
 from waitinglist.serializers import WaitingListSerializer, ExistingUserSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -34,6 +35,9 @@ class WaitingListView(APIView):
                                         is_active=False)
             new_user.set_password('secret')
             serializer.save()
+
+            UserProfile.objects.create(user=new_user)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
     
@@ -77,11 +81,20 @@ class WaitingListInviteView(APIView):
                         recipient_list=[reciber_email], 
                         fail_silently=False,
                         )
-                return Response({'success': 'email was send'}, status=status.HTTP_200_OK)
+                return Response({
+                    'success': True,
+                    'message': 'email was send'
+                }, status=status.HTTP_200_OK)
             else:
-                return Response({'error': 'user alredy active'}, status=status.HTTP_303_SEE_OTHER)
+                return Response({
+                    'successs': False,
+                    'message': 'user alredy active'
+                }, status=status.HTTP_303_SEE_OTHER)
         else:
-            return Response({'error': 'email was not send'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': False,
+                'message': 'email was not send'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
 
 class UserExistsView(APIView):
@@ -95,7 +108,16 @@ class UserExistsView(APIView):
             try:
                 user = waitinglist.get(email=serializer.validated_data["email"])
                 if user:
-                    return Response({'error': 'user already exists.'}, status=status.HTTP_409_CONFLICT)
+                    return Response({
+                        'success': False,
+                        'message': 'user already exists.'
+                    }, status=status.HTTP_409_CONFLICT)
             except ObjectDoesNotExist:
-                return Response({'message':'user does not exist'}, status=status.HTTP_200_OK)
-        return Response({'error': 'email was not send'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'success': False,
+                    'message':'user does not exist'
+                }, status=status.HTTP_200_OK)
+        return Response({
+            'success': False,
+            'message': 'email was not send'
+        }, status=status.HTTP_400_BAD_REQUEST)

@@ -1,7 +1,7 @@
 from rest_framework.generics import ListAPIView
 from rest_framework.filters import SearchFilter
-from .models import CityCatalog
-from .serializers import CityListSerializer
+from .models import CityCatalog, LanguageCatalog
+from .serializers import CityListSerializer, LanguageSerializer
 
 
 class CityListView(ListAPIView):
@@ -11,3 +11,11 @@ class CityListView(ListAPIView):
     filter_backends = (SearchFilter,)
     search_fields = ('name',)
     pagination_class = None
+
+
+class LanguageListView(ListAPIView):
+    queryset = LanguageCatalog.objects.all()
+    serializer_class = LanguageSerializer
+
+    filter_backends = [SearchFilter]
+    search_fields = ['name']
