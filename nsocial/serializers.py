@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from nsocial.models import CustomUser, UserProfile
+from nsocial.models import CustomUser, UserProfile, SocialMediaProfile
 from api.models import LanguageCatalog
 from django.contrib.auth.password_validation import validate_password
 
@@ -36,12 +36,21 @@ class TokenSerializer(serializers.Serializer):
     token = serializers.TimeField(required=True)
 
 
+class SocialMediaProfileSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = SocialMediaProfile
+        fields = ['id', 'platform_name', 'profile_url']
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     languages = serializers.SlugRelatedField(
         many=True,
         queryset=LanguageCatalog.objects.all(),
         slug_field='name'
     )
+    social_media_profiles = SocialMediaProfileSerializer(many=True, read_only=True)
+
     class Meta:
         model = UserProfile
         fields = [
@@ -53,7 +62,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'street',
             'city',
             'postal_code',
-            'languages'
+            'languages',
+            'social_media_profiles',
         ]
 
 

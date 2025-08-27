@@ -90,3 +90,15 @@ class UserProfile(models.Model):
          self.subscription_current_period_end = None
          self.cancel_at_period_end = False
          self.save()
+
+
+class SocialMediaProfile(models.Model):
+    user_profile = models.ForeignKey('UserProfile', on_delete=models.CASCADE, related_name='social_media_profiles')
+    platform_name = models.CharField(max_length=100)
+    profile_url = models.URLField(max_length=255)
+
+    def __str__(self):
+        return f"{self.user_profile.user}'s {self.platform_name} Profile"
+
+    class Meta:
+        unique_together = ('user_profile', 'platform_name')

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from nsocial.models import CustomUser, UserProfile
+from nsocial.models import CustomUser, UserProfile, SocialMediaProfile
 # Register your models here.
 
 
@@ -10,3 +10,4 @@ class CustomUserAdmin(admin.ModelAdmin):
 
 
 admin.site.register(UserProfile)
+admin.site.register(SocialMediaProfile)

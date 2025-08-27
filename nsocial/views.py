@@ -1,6 +1,6 @@
 from api.models import InviteTmpToken
-from .serializers import CustomUserSerializer, CurrentUserSerializer, UserProfileSerializer
-from .models import CustomUser, UserProfile
+from .serializers import CustomUserSerializer, CurrentUserSerializer, UserProfileSerializer, SocialMediaProfileSerializer
+from .models import CustomUser, UserProfile, SocialMediaProfile
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
@@ -9,11 +9,9 @@ from rest_framework.views import APIView
 from django.urls import reverse
 from nsocial.serializers import ChangePasswordSerializer, SetNewPasswordSerializer, PasswordResetConfirmSerializer
 from django.contrib.auth import get_user_model
-from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
@@ -167,3 +165,28 @@ class PasswordResetConfirmView(APIView):
                 return Response(r.json(), status=status.HTTP_200_OK)
         else:
             return Response({'error': 'The reset link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SocialMediaProfileListCreateView(generics.ListCreateAPIView):
+
+    serializer_class = SocialMediaProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Filtra para devolver solo los perfiles del usuario actual
+        return SocialMediaProfile.objects.filter(user_profile=self.request.user.profile)
+
+    def perform_create(self, serializer):
+        # Asigna automáticamente el perfil del usuario actual al crear un nuevo objeto
+        serializer.save(user_profile=self.request.user.profile)
+
+class SocialMediaProfileRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Vista para ver, actualizar y eliminar un perfil de red social específico.
+    """
+    serializer_class = SocialMediaProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # El usuario solo puede afectar a sus propios perfiles sociales
+        return SocialMediaProfile.objects.filter(user_profile=self.request.user.profile)
