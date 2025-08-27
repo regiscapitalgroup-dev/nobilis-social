@@ -173,8 +173,15 @@ class SocialMediaProfileListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Filtra para devolver solo los perfiles del usuario actual
+
         return SocialMediaProfile.objects.filter(user_profile=self.request.user.profile)
+
+    def get_serializer(self, *args, **kwargs):
+
+        if isinstance(kwargs.get('data', {}), list):
+            kwargs['many'] = True
+
+        return super().get_serializer(*args, **kwargs)
 
     def perform_create(self, serializer):
         # Asigna automáticamente el perfil del usuario actual al crear un nuevo objeto
