@@ -7,6 +7,7 @@ class Plan(models.Model):
     color = models.CharField(max_length=20, verbose_name="Color")
     price_year = models.CharField(max_length=50, verbose_name="Annual Price")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Price")
+    shipping = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Shipping")
     description = models.CharField(max_length=100, verbose_name="Description")
     stripe_plan_id = models.CharField(max_length=255, unique=True)
     price_str = models.CharField(max_length=30, null=False, blank=True)

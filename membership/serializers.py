@@ -134,6 +134,7 @@ class SubscriptionStatusSerializer(serializers.Serializer):
 
 class PlanNobilisSerializer(serializers.ModelSerializer):
     price = serializers.FloatField()
+    shipping = serializers.FloatField()
 
     class Meta:
         model = Plan
