@@ -27,7 +27,6 @@ class Plan(models.Model):
     member_introduction = models.BooleanField(default=False, verbose_name="Member Introduction")
     dedicated_nobilis_contact = models.BooleanField(default=False, verbose_name="Dedicated Nobilis Contact")
     nobilis_founder_badge = models.BooleanField(default=False, verbose_name="Nobilis Founder Badge")
-    active_participantion_in_nobilis = models.BooleanField(default=False, verbose_name="Active Participantion in Nobilis (25k Credits)")
 
     requirements = models.JSONField(verbose_name="Requirements")
 
