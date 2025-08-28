@@ -15,6 +15,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
+from rest_framework.parsers import MultiPartParser, FormParser
 
 
 class RegisterView(generics.CreateAPIView):
@@ -74,6 +75,7 @@ class SetNewPasswordView(generics.GenericAPIView):
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
+    parser_classes = [MultiPartParser, FormParser]
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [IsAuthenticated]

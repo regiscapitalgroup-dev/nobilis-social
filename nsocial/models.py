@@ -50,7 +50,8 @@ class UserProfile(models.Model):
     street = models.CharField(max_length=200, null=True, blank=True) #EncryptedCharField(max_length=250, null=True, blank=True)
     city = models.CharField(max_length=100, null=True, blank=True) #EncryptedCharField(max_length=150, null=True, blank=True)
     postal_code = models.CharField(max_length=10, null=True, blank=True) #EncryptedCharField(max_length=15, null=True, blank=True)
-    #country = models.CharField(max_length=150, null=True, blank=True) #EncryptedCharField(max_length=150, null=True, blank=True)
+    prefered_phone = models.BooleanField(default=False)
+    prefered_email = models.BooleanField(default=False)
     languages = models.ManyToManyField('api.LanguageCatalog', blank=True, related_name='user_profiles')
 
     # --- Campos de Suscripción (actualizados por webhooks/API) ---

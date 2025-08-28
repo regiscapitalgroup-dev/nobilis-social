@@ -17,6 +17,7 @@ class Plan(models.Model):
     platform_access = models.BooleanField(default=False, verbose_name="Platform Access")
     profile_registration = models.BooleanField(default=False, verbose_name="Profile Registration")
     introduction_registration = models.BooleanField(default=False, verbose_name="Introduction Registration")
+    experience_registration = models.BooleanField(default=False, verbose_name="Experience Registration")
     access_to_the_community_forum = models.BooleanField(default=False, verbose_name="Access to The Community Forum")
     access_experts_and_mentees = models.BooleanField(default=False, verbose_name="Access to The Experts & Mentees")
     access_to_forums_and_think_tanks = models.BooleanField(default=False, verbose_name="Access to The Forum & Think Tanks")
