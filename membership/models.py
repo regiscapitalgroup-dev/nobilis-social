@@ -1,10 +1,12 @@
 from django.db import models
+from django.conf import settings
 
 
 class Plan(models.Model):
     title = models.CharField(max_length=100, verbose_name="Title")
     color = models.CharField(max_length=20, verbose_name="Color")
     price_year = models.CharField(max_length=50, verbose_name="Annual Price")
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Price")
     description = models.CharField(max_length=100, verbose_name="Description")
     stripe_plan_id = models.CharField(max_length=255, unique=True)
     price_str = models.CharField(max_length=30, null=False, blank=True)
@@ -36,3 +38,23 @@ class Plan(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ShippingAddress(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shipping')
+    name = models.CharField(max_length=20, verbose_name="Name")
+    address = models.TextField(null=True, blank=True, verbose_name="Shipping Address")
+    country = models.CharField(max_length=80, null=True, blank=True, verbose_name="Country")
+    city = models.CharField(max_length=150, null=True, blank=True, verbose_name="City")
+    card_no = models.CharField(null=True, blank=True, verbose_name="Card Number")
+    card_type = models.CharField(null=True, blank=True, verbose_name="Card Type")
+    card_last_4 = models.CharField(null=True, blank=True, verbose_name="Card Last 4")
+    same_billing_address = models.BooleanField(default=False, verbose_name="Billing Address is Same as shipping")
+    billing_address = models.TextField(null=True, blank=True, verbose_name="Billing Address")
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Shipping"
+        verbose_name_plural = "Shippings"

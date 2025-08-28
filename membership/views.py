@@ -4,7 +4,8 @@ from rest_framework.views import APIView
 from membership.models import Plan 
 from django.utils.decorators import method_decorator
 from membership.serializers import (PriceSerializer, SubscriptionCreateSerializer,
-                                    SubscriptionStatusSerializer, PlanNobilisSerializer, PlanNobilisPriceSerializer)
+                                    SubscriptionStatusSerializer, PlanNobilisSerializer, PlanNobilisPriceSerializer,
+                                    ShippingAddressSerializer)
 from nsocial.models import UserProfile
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -284,52 +285,37 @@ class CancelSubscriptionView(APIView):
         
 
 class SubscriptionStatusView(APIView):
-    """
-    Obtiene el estado y detalle actual de la suscripción del usuario
-    consultando a Stripe con el ID almacenado localmente.
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         user = request.user
         try:
-            # 1. Obtener Perfil y ID de Suscripción Local
             profile = get_object_or_404(UserProfile, user=user)
             subscription_id = profile.stripe_subscription_id
 
             if not subscription_id:
-                # El usuario no tiene una suscripción registrada localmente
-                return Response({"status": None, "message": "No se encontró registro de suscripción."}, status=status.HTTP_200_OK) # O 404 si prefieres
+                return Response({"success": False, "message": "No subscription record found."}, status=status.HTTP_200_OK) # O 404 si prefieres
 
-            # 2. Consultar a Stripe para obtener datos frescos
             try:
                 stripe_subscription = stripe.Subscription.retrieve(
                     subscription_id,
-                    # Expandir detalles útiles para mostrar al usuario
                     expand=[
-                        'plan.product', # Detalles del plan y producto suscrito
-                        'default_payment_method' # Detalles de la tarjeta usada (brand, last4)
+                        'plan.product',
+                        'default_payment_method'
                         ]
                 )
 
-                # 3. (Opcional pero recomendado) Auto-corrección del estado local
-                # Compara datos clave y actualiza si hay discrepancia con Stripe
                 try:
                     local_period_end_ts = int(profile.subscription_current_period_end.timestamp()) if profile.subscription_current_period_end else None
 
-                    # Obtener de forma segura el current_period_end de Stripe, default a None si no existe
                     stripe_period_end_ts = getattr(stripe_subscription, 'current_period_end', None)
-                    # Obtener de forma segura el status de Stripe
                     stripe_status = getattr(stripe_subscription, 'status', None)
-                    # Obtener de forma segura cancel_at_period_end de Stripe
                     stripe_cancel_at_period_end = getattr(stripe_subscription, 'cancel_at_period_end', False) # Default a False
 
-                    # Comparar campos relevantes, ahora usando las variables seguras
                     if (profile.subscription_status != stripe_status or
                         local_period_end_ts != stripe_period_end_ts or
                         profile.cancel_at_period_end != stripe_cancel_at_period_end):
                            logger.warning(f"Discrepancia detectada para sub {subscription_id} (User {user.id}). Actualizando perfil local desde Stripe.")
-                           # ¡IMPORTANTE! Asegúrate que el método helper también sea seguro
                            profile.update_subscription_details(stripe_subscription)
 
                 except Exception as comparison_error:
@@ -564,10 +550,6 @@ class PlanPricesView(generics.RetrieveAPIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 class AccountOverviewView(APIView):
-    """
-    Devuelve información combinada del usuario autenticado y
-    el estado/detalle actual de su suscripción.
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
@@ -649,3 +631,11 @@ class AccountOverviewView(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class ShippingAddressView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ShippingAddressSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user.shipping

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from membership.models import Plan 
+from membership.models import Plan, ShippingAddress
 import datetime
 import logging # Para logs en to_representation si es necesario
 import stripe
@@ -156,3 +156,19 @@ class PlanSerializer(serializers.Serializer):
     # Podemos devolver solo el ID o intentar serializar el objeto Product si lo expandimos.
     product = serializers.CharField() # Devuelve el ID del producto asociado al plan
 
+
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShippingAddress
+        fields = [
+            'id', 'user', 'name', 'address', 'country', 'city', 'card_no',
+            'card_type', 'card_last_4', 'same_billing_address',
+            'billing_address'
+        ]
+
+        # --- 2. AÑADE ESTA SECCIÓN ---
+        extra_kwargs = {
+            'id': {'read_only': True},
+            'user': {'read_only': True},
+            'card_no': {'write_only': True}
+        }
