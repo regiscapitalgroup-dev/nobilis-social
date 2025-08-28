@@ -133,6 +133,8 @@ class SubscriptionStatusSerializer(serializers.Serializer):
     
 
 class PlanNobilisSerializer(serializers.ModelSerializer):
+    price = serializers.FloatField()
+
     class Meta:
         model = Plan
         fields = '__all__'
