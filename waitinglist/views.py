@@ -36,8 +36,6 @@ class WaitingListView(APIView):
             new_user.set_password('secret')
             serializer.save()
 
-            UserProfile.objects.create(user=new_user)
-
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
     

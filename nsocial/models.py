@@ -52,7 +52,7 @@ class UserProfile(models.Model):
     postal_code = models.CharField(max_length=10, null=True, blank=True) #EncryptedCharField(max_length=15, null=True, blank=True)
     prefered_phone = models.BooleanField(default=False)
     prefered_email = models.BooleanField(default=False)
-    languages = models.ManyToManyField('api.LanguageCatalog', blank=True, related_name='user_profiles')
+    languages = models.TextField(blank=True, null=True)
 
     # --- Campos de Suscripción (actualizados por webhooks/API) ---
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True) # ID de la suscripción activa/relevante

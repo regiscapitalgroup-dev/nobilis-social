@@ -44,46 +44,7 @@ class SocialMediaProfileSerializer(serializers.ModelSerializer):
         fields = ['id', 'platform_name', 'profile_url']
 
 
-class JsonStringArrayField(serializers.ListField):
-    """
-    Campo que espera un string JSON con un array
-    y lo convierte en una lista de Python.
-    Ahora también maneja datos que ya llegan como una lista.
-    """
-
-    def to_internal_value(self, data):
-        # Si los datos ya son una lista, simplemente úsalos.
-        if isinstance(data, list):
-            return super().to_internal_value(data)
-
-        # Si los datos son un string, intenta decodificarlo como JSON.
-        if isinstance(data, str):
-            try:
-                # Esto manejará un string como '["Spanish", "English"]'
-                return json.loads(data)
-            except (TypeError, ValueError):
-                # Esto manejará un string como 'Spanish' (un solo valor)
-                return [data]
-
-        # Si no es ni lista ni string, falla.
-        self.fail('invalid', format='json')
-
-
 class UserProfileSerializer(serializers.ModelSerializer):
-    languages = serializers.StringRelatedField(many=True, read_only=True)
-
-    # 2. CAMPO DE SOLO ESCRITURA: Para recibir y procesar la entrada.
-    #    Usamos nuestro campo personalizado y lo marcamos como 'write_only'.
-    #    Le damos un nombre distinto para evitar conflictos.
-    languages_input = JsonStringArrayField(
-        child=serializers.SlugRelatedField(
-            queryset=LanguageCatalog.objects.all(),
-            slug_field='name'
-        ),
-        required=False,
-        write_only=True,
-        source='languages'  # También apunta a la relación 'languages'
-    )
     social_media_profiles = SocialMediaProfileSerializer(many=True, read_only=True)
 
     class Meta:
@@ -98,9 +59,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'city',
             'postal_code',
             'languages',
-            'languages_input',
             'social_media_profiles',
         ]
+
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
