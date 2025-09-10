@@ -1,6 +1,14 @@
 from api.models import InviteTmpToken
-from .serializers import CustomUserSerializer, CurrentUserSerializer, UserProfileSerializer, SocialMediaProfileSerializer
-from .models import CustomUser, UserProfile, SocialMediaProfile
+from .serializers import (
+    CustomUserSerializer,
+    CurrentUserSerializer,
+    UserProfileSerializer,
+    SocialMediaProfileSerializer,
+    FullProfileSerializer,
+    UserVideoSerializer,
+    ExperienceSerializer
+)
+from .models import CustomUser, UserProfile, SocialMediaProfile, Experience
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
@@ -199,3 +207,46 @@ class SocialMediaProfileRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroy
     def get_queryset(self):
         # El usuario solo puede afectar a sus propios perfiles sociales
         return SocialMediaProfile.objects.filter(user_profile=self.request.user.profile)
+
+
+class FullProfileView(generics.RetrieveUpdateAPIView):
+    """
+    Vista para ver y actualizar el perfil completo del usuario autenticado.
+    """
+    serializer_class = FullProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        # Buscamos el perfil del usuario, si no existe, lo creamos.
+        # Esto asegura que la vista siempre tenga un objeto con el cual trabajar.
+        profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+class UserVideoListCreateView(generics.ListCreateAPIView):
+    serializer_class = UserVideoSerializer
+    permission_classes = [IsAuthenticated]
+    # Especificamos que esta vista acepta datos 'multipart/form-data'
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        # Mostramos solo los videos del usuario que hace la petición
+        return self.request.user.profile.videos.all().order_by('-uploaded_at')
+
+    def perform_create(self, serializer):
+        # Asignamos el perfil del usuario automáticamente al subir un video
+        serializer.save(user_profile=self.request.user.profile)
+
+
+class UserVideoDestroyView(generics.DestroyAPIView):
+    serializer_class = UserVideoSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # El usuario solo puede eliminar sus propios videos
+        return self.request.user.profile.videos.all()
+
+
+class ExperienceListView(generics.ListAPIView):
+    queryset = Experience.objects.all()
+    serializer_class = ExperienceSerializer
+    permission_classes = [AllowAny]

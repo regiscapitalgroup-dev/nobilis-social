@@ -1,7 +1,15 @@
 from django.urls import path, include
 from waitinglist.views import WaitingListDetailView, WaitingListInviteView, WaitingListView, UserExistsView
-from nsocial.views import (ChangePasswordView, SetNewPasswordView, ForgotMyPassword, PasswordResetConfirmView,
-                           UserProfileView, SocialMediaProfileListCreateView, SocialMediaProfileRetrieveUpdateDestroyView)
+from nsocial.views import (
+    ChangePasswordView,
+    SetNewPasswordView,
+    ForgotMyPassword,
+    PasswordResetConfirmView,
+    UserProfileView,
+    SocialMediaProfileListCreateView,
+    SocialMediaProfileRetrieveUpdateDestroyView,
+    FullProfileView, UserVideoDestroyView, UserVideoListCreateView, ExperienceListView
+)
 from membership.views import AccountOverviewView
 from api.views import CityListView, LanguageListView
 from rest_framework_simplejwt.views import (
@@ -29,6 +37,9 @@ urlpatterns = [
     path('cities/', CityListView.as_view(), name='city-list'),
     path('languages/', LanguageListView.as_view(), name='language-list'),
     path('users/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('full-profile/', FullProfileView.as_view(), name='full-profile'),
     path('social-profiles/', SocialMediaProfileListCreateView.as_view(), name='social-profile-list-create'),
     path('social-profiles/<int:pk>/', SocialMediaProfileRetrieveUpdateDestroyView.as_view(), name='social-profile-detail'),
+    path('profile/videos/', UserVideoListCreateView.as_view(), name='video-list-create'),
+    path('experiences/', ExperienceListView.as_view(), name='experience-list'),
 ]

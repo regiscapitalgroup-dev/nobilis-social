@@ -6,7 +6,6 @@ from api.models import LanguageCatalog
 import datetime
 from django.conf import settings
 from django.core.exceptions import ValidationError
-#from encrypted_fields.fields import EncryptedCharField, EncryptedDateField
 
 def validate_image_size(value):
     filesize = value.size
@@ -53,6 +52,8 @@ class UserProfile(models.Model):
     prefered_phone = models.BooleanField(default=False)
     prefered_email = models.BooleanField(default=False)
     languages = models.TextField(blank=True, null=True)
+
+    biography = models.TextField(blank=True, null=True)
 
     # --- Campos de Suscripción (actualizados por webhooks/API) ---
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True) # ID de la suscripción activa/relevante
@@ -103,3 +104,97 @@ class SocialMediaProfile(models.Model):
 
     class Meta:
         unique_together = ('user_profile', 'platform_name')
+
+
+class PersonalDetail(models.Model):
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='personal_detail')
+    hobbies = models.TextField(blank=True, null=True)
+    interests = models.TextField(blank=True, null=True)
+
+class Club(models.Model):
+    personal_detail = models.ForeignKey(PersonalDetail, on_delete=models.CASCADE, related_name='clubs')
+    name = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+
+class ProfessionalProfile(models.Model):
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='professional_profile')
+    industries = models.TextField(blank=True, null=True)
+    professional_interest = models.TextField(blank=True, null=True)
+
+class WorkPosition(models.Model):
+    professional_profile = models.ForeignKey(ProfessionalProfile, on_delete=models.CASCADE, related_name='work_positions')
+    company = models.CharField(max_length=255)
+    position = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    from_year = models.CharField(max_length=10)
+    to_year = models.CharField(max_length=10)
+
+class Education(models.Model):
+    professional_profile = models.ForeignKey(ProfessionalProfile, on_delete=models.CASCADE, related_name='education')
+    university_name = models.CharField(max_length=255)
+    carreer = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    from_year = models.CharField(max_length=10)
+    to_year = models.CharField(max_length=10)
+
+class BoardPosition(models.Model):
+    professional_profile = models.ForeignKey(ProfessionalProfile, on_delete=models.CASCADE, related_name='on_board')
+    company = models.CharField(max_length=255)
+    position = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    from_year = models.CharField(max_length=10)
+    to_year = models.CharField(max_length=10)
+
+class NonProfitInvolvement(models.Model):
+    professional_profile = models.ForeignKey(ProfessionalProfile, on_delete=models.CASCADE, related_name='non_profit_involvement')
+    company = models.CharField(max_length=255)
+    position = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    from_year = models.CharField(max_length=10)
+    to_year = models.CharField(max_length=10)
+
+class Recognition(models.Model):
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='recognition')
+    # Usamos JSONField para almacenar listas de texto simple de forma flexible
+    top_accomplishments = models.JSONField(default=list)
+    additional_links = models.JSONField(default=list)
+
+class Expertise(models.Model):
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='expertise')
+    title = models.CharField(max_length=100)
+    content = models.TextField()
+    rate = models.CharField(max_length=50)
+
+
+class UserVideo(models.Model):
+    # Relación con el perfil: si se borra el perfil, se borran sus videos.
+    user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='videos')
+
+    # El archivo de video en sí.
+    #video_file = models.FileField(upload_to='user_videos/')
+    video_link = models.URLField(null=True, blank=True)
+
+    # Campos adicionales para dar contexto al video.
+    title = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Video for {self.user_profile.user.username} - {self.title}"
+
+
+class Experience(models.Model):
+    title = models.CharField(max_length=255, verbose_name="Título de la Experiencia")
+    photograph = models.ImageField(upload_to='experiences/', verbose_name="Fotografía")
+    description = models.TextField(verbose_name="Descripción")
+    city = models.CharField(max_length=100, verbose_name="Ciudad")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        verbose_name = "Experiencia"
+        verbose_name_plural = "Experiencias"
+        ordering = ['-created_at']
