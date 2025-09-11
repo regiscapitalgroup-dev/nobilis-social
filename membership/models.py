@@ -30,8 +30,8 @@ class Plan(models.Model):
     member_introduction = models.BooleanField(default=False, verbose_name="Member Introduction")
     dedicated_nobilis_contact = models.BooleanField(default=False, verbose_name="Dedicated Nobilis Contact")
     nobilis_founder_badge = models.BooleanField(default=False, verbose_name="Nobilis Founder Badge")
-
     requirements = models.JSONField(verbose_name="Requirements")
+
 
     class Meta:
         verbose_name = "Membership"
@@ -59,3 +59,24 @@ class ShippingAddress(models.Model):
     class Meta:
         verbose_name = "Shipping"
         verbose_name_plural = "Shippings"
+
+
+class MembershipSubscription(models.Model):
+    user_profile = models.ForeignKey('nsocial.UserProfile', on_delete=models.CASCADE, related_name='subscriptions')
+    plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True)
+    stripe_subscription_id = models.CharField(max_length=100, unique=True)
+    status = models.CharField(max_length=20)
+    current_period_end = models.DateTimeField(null=True, blank=True)
+    cancel_at_period_end = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['stripe_subscription_id']),
+            models.Index(fields=['status']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Sub {self.stripe_subscription_id} ({self.status})"

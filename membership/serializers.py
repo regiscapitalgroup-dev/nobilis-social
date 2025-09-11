@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from membership.models import Plan, ShippingAddress
+from membership.models import Plan, ShippingAddress, MembershipSubscription
 import datetime
 import logging # Para logs en to_representation si es necesario
 import stripe
@@ -175,3 +175,19 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
             'user': {'read_only': True},
             'card_no': {'write_only': True}
         }
+
+
+class PlanBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Plan
+        fields = ['id', 'title', 'description', 'price', 'interval', 'price_description', 'features', 'stripe_plan_id']
+
+class MembershipSubscriptionSerializer(serializers.ModelSerializer):
+    plan = PlanBriefSerializer(read_only=True)
+
+    class Meta:
+        model = MembershipSubscription
+        fields = [
+            'id', 'stripe_subscription_id', 'status', 'current_period_end', 'cancel_at_period_end',
+            'is_active', 'created_at', 'plan'
+        ]

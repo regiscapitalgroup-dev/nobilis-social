@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from membership.serializers import SubscriptionStatusSerializer, MembershipSubscriptionSerializer
 from nsocial.models import (
     CustomUser,
     UserProfile,
@@ -14,10 +15,15 @@ from nsocial.models import (
     Expertise,
     UserVideo,
     Experience,
+    Author
 )
+import stripe
+import logging
 from api.models import LanguageCatalog
 import json
 from django.contrib.auth.password_validation import validate_password
+
+logger = logging.getLogger(__name__)
 
 class CustomUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, style={'input_type': 'password'})
@@ -182,6 +188,12 @@ class UserVideoSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'uploaded_at']
 
 
+class AuthorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Author
+        fields = ['id', 'name', 'photo_url']
+
+
 class FullProfileSerializer(UserProfileSerializer):
     personal_detail = PersonalDetailSerializer(required=False)
     professional_profile = ProfessionalProfileSerializer(required=False)
@@ -189,13 +201,77 @@ class FullProfileSerializer(UserProfileSerializer):
     expertise = ExpertiseSerializer(many=True, required=False)
     videos = UserVideoSerializer(many=True, read_only=True)
 
+    subscription = serializers.SerializerMethodField()
+    current_subscription = MembershipSubscriptionSerializer(read_only=True)
+
     class Meta(UserProfileSerializer.Meta):
         model = UserProfile
         fields = UserProfileSerializer.Meta.fields + [
-            'biography', 'personal_detail', 'professional_profile', 'recognition', 'expertise', 'videos'
+            'bio_presentation', 'biography', 'pic_footer', 'personal_detail', 'professional_profile',
+            'recognition', 'expertise', 'videos', 'subscription', 'current_subscription'
         ]
 
+    def get_subscription(self, obj: UserProfile):
+
+        if not obj.stripe_subscription_id:
+            return None
+
+        fresh = bool(self.context.get('fresh_subscription', False))
+
+        # Opción A: devolver datos cacheados del perfil (sin pegar a Stripe)
+        if not fresh:
+            return {
+                'id': obj.stripe_subscription_id,
+                'status': obj.subscription_status,
+                'current_period_end': obj.subscription_current_period_end,
+                'cancel_at_period_end': obj.cancel_at_period_end,
+                'card': (
+                    {'brand': obj.card_brand, 'last4': obj.card_last4}
+                    if obj.card_last4 else None
+                )
+            }
+
+        # Opción B: consultar Stripe y serializar con SubscriptionStatusSerializer
+        try:
+            stripe_sub = stripe.Subscription.retrieve(
+                obj.stripe_subscription_id,
+                expand=['plan.product', 'default_payment_method']
+            )
+
+            # Sincronización opcional de campos cacheados con lo que devuelve Stripe
+            local_period_end_ts = int(
+                obj.subscription_current_period_end.timestamp()) if obj.subscription_current_period_end else None
+            stripe_period_end_ts = getattr(stripe_sub, 'current_period_end', None)
+            stripe_status = getattr(stripe_sub, 'status', None)
+            stripe_cancel_at_period_end = getattr(stripe_sub, 'cancel_at_period_end', False)
+
+            if (
+                    obj.subscription_status != stripe_status or
+                    local_period_end_ts != stripe_period_end_ts or
+                    obj.cancel_at_period_end != stripe_cancel_at_period_end
+            ):
+                logger.warning(
+                    f"Desfase de datos de suscripción detectado para {obj.user_id}. Actualizando perfil."
+                )
+                obj.update_subscription_details(stripe_sub)
+
+            return SubscriptionStatusSerializer(stripe_sub).data
+
+        except stripe.error.InvalidRequestError as e:
+            logger.warning(
+                f"ID de suscripción inválido para user {obj.user_id} ({obj.stripe_subscription_id}): {e}. Limpiando campos locales."
+            )
+            obj.clear_subscription_details()
+            return {"status": "inactive", "message": "Subscription reference invalid."}
+        except stripe.error.StripeError as e:
+            logger.error(
+                f"Error de Stripe al recuperar suscripción para user {obj.user_id}: {e}",
+                exc_info=True
+            )
+            return {"status": "error", "message": "Could not retrieve subscription details."}
+
     def update(self, instance, validated_data):
+        instance.bio_presentation = validated_data.get('bio_presentation', instance.bio_presentation)
         instance.biography = validated_data.get('biography', instance.biography)
         instance.save()
 
@@ -256,7 +332,40 @@ class ExperienceSerializer(serializers.ModelSerializer):
     # Pro-tip: Defino el precio como FloatField para que en el JSON
     # aparezca como un número (ej. 99.99) y no como una cadena ("99.99").
     price = serializers.FloatField()
+    authors = AuthorSerializer(many=True)
 
     class Meta:
         model = Experience
-        fields = ['id', 'title', 'photograph', 'description', 'city', 'price', 'created_at']
+        fields = [
+            'id', 'title', 'authors', 'experience_photograph', 'description', 'city', 'price',
+            'is_new', 'created_at'
+        ]
+
+    def create(self, validated_data):
+        authors_data = validated_data.pop('authors', [])
+        exp = Experience.objects.create(**validated_data)
+        for a in authors_data:
+            author_obj, _ = Author.objects.get_or_create(name=a.get('name'), defaults={'photo_url': a.get('photo_url')})
+            # Si quieres actualizar photo_url cuando llegue una nueva
+            if a.get('photo_url') and author_obj.photo_url != a['photo_url']:
+                author_obj.photo_url = a['photo_url']
+                author_obj.save()
+            exp.authors.add(author_obj)
+        return exp
+
+    def update(self, instance, validated_data):
+        authors_data = validated_data.pop('authors', None)
+        for attr, val in validated_data.items():
+            setattr(instance, attr, val)
+        instance.save()
+        if authors_data is not None:
+            author_objs = []
+            for a in authors_data:
+                author_obj, _ = Author.objects.get_or_create(name=a.get('name'),
+                                                             defaults={'photo_url': a.get('photo_url')})
+                if a.get('photo_url') and author_obj.photo_url != a['photo_url']:
+                    author_obj.photo_url = a['photo_url']
+                    author_obj.save()
+                author_objs.append(author_obj)
+            instance.authors.set(author_objs)
+        return instance

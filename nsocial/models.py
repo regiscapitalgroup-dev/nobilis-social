@@ -44,25 +44,26 @@ class UserProfile(models.Model):
     profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics', null=True, blank=True,
                                         validators=[validate_image_size])
 
-    birthday = models.DateField(null=True, blank=True) #EncryptedDateField(null=True, blank=True) #
-    phone_number = models.CharField(max_length=25, null=True, blank=True) #EncryptedCharField(max_length=50, null=True, blank=True)
-    street = models.CharField(max_length=200, null=True, blank=True) #EncryptedCharField(max_length=250, null=True, blank=True)
-    city = models.CharField(max_length=100, null=True, blank=True) #EncryptedCharField(max_length=150, null=True, blank=True)
-    postal_code = models.CharField(max_length=10, null=True, blank=True) #EncryptedCharField(max_length=15, null=True, blank=True)
+    birthday = models.DateField(null=True, blank=True)
+    phone_number = models.CharField(max_length=25, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    postal_code = models.CharField(max_length=10, null=True, blank=True)
     prefered_phone = models.BooleanField(default=False)
     prefered_email = models.BooleanField(default=False)
     languages = models.TextField(blank=True, null=True)
-
+    bio_presentation = models.CharField(max_length=250, blank=True, null=True)
     biography = models.TextField(blank=True, null=True)
+    pic_footer = models.CharField(max_length=250, blank=True, null=True)
 
-    # --- Campos de Suscripción (actualizados por webhooks/API) ---
-    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True) # ID de la suscripción activa/relevante
-    subscription_status = models.CharField(max_length=20, blank=True, null=True) # ej: active, trialing, past_due, canceled
-    subscription_current_period_end = models.DateTimeField(blank=True, null=True) # Fecha fin periodo actual (UTC)
+    stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
+    subscription_status = models.CharField(max_length=20, blank=True, null=True)
+    subscription_current_period_end = models.DateTimeField(blank=True, null=True)
     cancel_at_period_end = models.BooleanField(default=False)
-    # --- Campos de Método de Pago Predeterminado (actualizados por API/webhooks) ---
+
+    #nobilis_suscription =
+
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
-    stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True) # El ID del PM por defecto
+    stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True)
     card_brand = models.CharField(max_length=50, blank=True, null=True)
     card_last4 = models.CharField(max_length=4, blank=True, null=True)
 
@@ -71,26 +72,53 @@ class UserProfile(models.Model):
 
     # --- Métodos Helper (útiles para webhooks y esta vista) ---
     def update_subscription_details(self, stripe_subscription):
-        """Actualiza campos locales desde un objeto Subscription de Stripe."""
+        """Actualiza caché del perfil y la `MembershipSubscription` asociada."""
+        from membership.models import Plan, MembershipSubscription
+        # Perfil (caché)
         self.stripe_subscription_id = stripe_subscription.id
-        self.subscription_status = stripe_subscription.status
-        self.cancel_at_period_end = stripe_subscription.cancel_at_period_end
+        self.subscription_status = getattr(stripe_subscription, 'status', None)
+        self.cancel_at_period_end = getattr(stripe_subscription, 'cancel_at_period_end', False)
         try:
-            self.subscription_current_period_end = datetime.datetime.fromtimestamp(
-                stripe_subscription.current_period_end, tz=datetime.timezone.utc
-            )
-        except (TypeError, ValueError):
-             self.subscription_current_period_end = None
-        # Podrías añadir lógica para plan_id si lo necesitas
+            ts = getattr(stripe_subscription, 'current_period_end', None)
+            self.subscription_current_period_end = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc) if ts else None
+        except Exception:
+            self.subscription_current_period_end = None
         self.save()
+
+        # Sincronizar/crear fila en MembershipSubscription
+        price_id = None
+        try:
+            items = getattr(stripe_subscription, 'items', None)
+            if items and getattr(items, 'data', None):
+                price_id = items.data[0].price.id
+        except Exception:
+            pass
+
+        plan_obj = Plan.objects.filter(stripe_plan_id=price_id).first() if price_id else None
+
+        sub_obj, _ = MembershipSubscription.objects.update_or_create(
+            stripe_subscription_id=stripe_subscription.id,
+            defaults={
+                'user_profile': self,
+                'plan': plan_obj,
+                'status': getattr(stripe_subscription, 'status', ''),
+                'cancel_at_period_end': getattr(stripe_subscription, 'cancel_at_period_end', False),
+                'current_period_end': self.subscription_current_period_end,
+                'is_active': getattr(stripe_subscription, 'status', '') in ['active', 'trialing'] and not getattr(stripe_subscription, 'canceled_at', None),
+            }
+        )
+
+        # Actualizar puntero de conveniencia
+        self.current_subscription = sub_obj
+        self.save(update_fields=['current_subscription'])
 
     def clear_subscription_details(self):
          """Limpia campos cuando una suscripción se cancela/elimina."""
          self.stripe_subscription_id = None
-         # Decide qué estado poner: 'canceled', 'deleted', None?
          self.subscription_status = 'canceled'
          self.subscription_current_period_end = None
          self.cancel_at_period_end = False
+         self.current_subscription = None
          self.save()
 
 
@@ -183,12 +211,24 @@ class UserVideo(models.Model):
         return f"Video for {self.user_profile.user.username} - {self.title}"
 
 
+class Author(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Autor")
+    photo_url = models.URLField(null=True, blank=True, verbose_name="Foto del Autor")
+
+    def __str__(self):
+        return self.name
+
+
 class Experience(models.Model):
     title = models.CharField(max_length=255, verbose_name="Título de la Experiencia")
-    photograph = models.ImageField(upload_to='experiences/', verbose_name="Fotografía")
-    description = models.TextField(verbose_name="Descripción")
-    city = models.CharField(max_length=100, verbose_name="Ciudad")
-    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Precio")
+    #author = models.CharField(max_length=255, verbose_name="Autor", null=True, blank=True)
+    #author_pic = models.URLField(null=True, blank=True)
+    authors = models.ManyToManyField(Author, related_name='experiences', blank=True)
+    experience_photograph = models.URLField(null=True, blank=True) #models.ImageField(upload_to='experiences/', verbose_name="Fotografía")
+    description = models.TextField(null=True, blank=True, verbose_name="Descripción")
+    city = models.CharField(null=True, blank=True, max_length=100, verbose_name="Ciudad")
+    price = models.DecimalField(null=True, blank=True, max_digits=10, decimal_places=2, verbose_name="Precio")
+    is_new = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

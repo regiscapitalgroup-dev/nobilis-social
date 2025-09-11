@@ -9,7 +9,11 @@ api/__pycache__
 nsocial/__pycache__
 nsocial/migrations/__pycache__
 api/migrations/__pycache__
-api/migrations/__pycache__
 membership/__pycache__
 membership/migrations/__pycache__
 .idea
+static
+staticfiles
+media
+.env*
+db.sqlite3

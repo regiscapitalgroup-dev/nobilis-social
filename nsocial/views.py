@@ -217,10 +217,17 @@ class FullProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        # Buscamos el perfil del usuario, si no existe, lo creamos.
-        # Esto asegura que la vista siempre tenga un objeto con el cual trabajar.
-        profile, created = UserProfile.objects.get_or_create(user=self.request.user)
+        # Buscamos/creamos el perfil del usuario autenticado
+        profile, _ = UserProfile.objects.get_or_create(user=self.request.user)
         return profile
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        raw = self.request.query_params.get('fresh_subscription')
+        # Acepta 1/true/yes (case-insensitive) como verdadero
+        fresh = str(raw).lower() in ('1', 'true', 'yes') if raw is not None else False
+        ctx['fresh_subscription'] = fresh
+        return ctx
 
 class UserVideoListCreateView(generics.ListCreateAPIView):
     serializer_class = UserVideoSerializer

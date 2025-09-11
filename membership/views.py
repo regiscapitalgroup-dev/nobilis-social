@@ -1,18 +1,18 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from membership.models import Plan 
+from membership.models import Plan, MembershipSubscription
 from django.utils.decorators import method_decorator
 from membership.serializers import (PriceSerializer, SubscriptionCreateSerializer,
                                     SubscriptionStatusSerializer, PlanNobilisSerializer, PlanNobilisPriceSerializer,
-                                    ShippingAddressSerializer)
+                                    ShippingAddressSerializer, MembershipSubscriptionSerializer)
 from nsocial.models import UserProfile
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 import logging
 import stripe
 from django.utils import timezone
-import datetime
+import datetime as dt
 from django.conf import settings
 
 
@@ -151,6 +151,45 @@ class CreateSubscriptionView(APIView):
                     # expand=['latest_invoice.payment_intent'],
                     expand=['latest_invoice']
                 )
+                profile.stripe_subscription_id = subscription.id
+                profile.subscription_status = subscription.status
+
+                # Determinar plan local a partir del price de Stripe
+                price_id = None
+                try:
+                    if hasattr(subscription, 'items') and subscription.items and subscription.items.data:
+                        price_id = subscription.items.data[0].price.id
+                except Exception:
+                    price_id = None
+
+                plan = Plan.objects.filter(stripe_plan_id=price_id).first() if price_id else None
+                # Crear/actualizar fila de MembershipSubscription
+                from django.utils import timezone
+                import datetime as dt
+
+                current_period_end = None
+                try:
+                    ts = getattr(subscription, 'current_period_end', None)
+                    current_period_end = dt.datetime.fromtimestamp(ts, tz=dt.timezone.utc) if ts else None
+                except Exception:
+                    pass
+
+                sub_obj, _ = MembershipSubscription.objects.update_or_create(
+                    stripe_subscription_id=subscription.id,
+                    defaults={
+                        'user_profile': profile,
+                        'plan': plan,
+                        'status': subscription.status,
+                        'cancel_at_period_end': getattr(subscription, 'cancel_at_period_end', False),
+                        'current_period_end': current_period_end,
+                        'is_active': subscription.status in ['active', 'trialing'] and not getattr(subscription,
+                                                                                                   'canceled_at', None),
+                    }
+                )
+
+                # Puntero de conveniencia en el perfil
+                profile.current_subscription = sub_obj
+                profile.save()
 
                 # 6. Manejar la respuesta de la suscripción
                 response_data = {
@@ -234,7 +273,7 @@ class CancelSubscriptionView(APIView):
                  for sub in subscriptions.data:
                       if sub.status in ['active', 'trialing'] and sub.cancel_at_period_end:
                            already_canceling = True
-                           cancel_date = datetime.datetime.fromtimestamp(sub.current_period_end, tz=datetime.timezone.utc)
+                           cancel_date = dt.datetime.fromtimestamp(sub.current_period_end, tz=dt.timezone.utc)
                            break
                  if already_canceling:
                       return Response({
@@ -253,6 +292,14 @@ class CancelSubscriptionView(APIView):
                     subscription_id_to_cancel,
                     cancel_at_period_end=True
                 )
+
+                try:
+                    sub_id = subscription_id_to_cancel
+                    MembershipSubscription.objects.filter(stripe_subscription_id=sub_id).update(
+                        cancel_at_period_end=True
+                    )
+                except Exception:
+                    pass
 
                 # 4. (Opcional) Actualizar estado local via Webhooks es MEJOR,
                 #    pero podríamos actualizar algo aquí si es crítico para la UI inmediata.
@@ -333,6 +380,17 @@ class SubscriptionStatusView(APIView):
                 return Response({"status": "inactive", "message": "La suscripción no se encontró en el sistema de facturación."}, status=status.HTTP_404_NOT_FOUND)
             except stripe.error.StripeError as e:
                 # Otro error de API de Stripe (ej: red, autenticación)
+                local = None
+                try:
+                    if subscription_id:
+                        local = MembershipSubscription.objects.filter(stripe_subscription_id=subscription_id).first()
+                except Exception:
+                    local = None
+
+                if local:
+                    from membership.serializers import MembershipSubscriptionSerializer
+                    return Response({'source': 'local', 'subscription': MembershipSubscriptionSerializer(local).data},
+                                    status=status.HTTP_200_OK)
                 logger.error(f"Error de API Stripe recuperando sub {subscription_id} (User {user.id}): {e}", exc_info=True)
                 # Podríamos devolver datos locales como fallback, pero es mejor indicar el error
                 return Response({"error": f"Error al contactar el sistema de facturación: {str(e)}"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -377,10 +435,71 @@ class StripeWebhookView(APIView):
              logger.error("Error inesperado construyendo evento webhook: %s", e, exc_info=True)
              return Response(status=status.HTTP_400_BAD_REQUEST)
 
-
         # 2. Manejar el evento específico
         event_type = event['type']
         data_object = event['data']['object'] # El objeto de Stripe (Invoice, Subscription, etc.)
+
+        if event_type in ['customer.subscription.created', 'customer.subscription.updated',
+                          'customer.subscription.deleted']:
+            sub = data_object  # Objeto Subscription de Stripe
+
+            # Ubicar el perfil: preferiblemente por `customer` si lo guardas
+            profile = None
+            try:
+                customer_id = sub.get('customer')
+                if customer_id:
+                    profile = UserProfile.objects.filter(stripe_customer_id=customer_id).first()
+                if not profile:
+                    profile = UserProfile.objects.filter(stripe_subscription_id=sub.get('id')).first()
+            except Exception:
+                profile = None
+
+            # Resolver plan a partir del price del primer item
+            price_id = None
+            try:
+                items = sub.get('items', {}).get('data', [])
+                if items:
+                    price_id = items[0].get('price', {}).get('id')
+            except Exception:
+                price_id = None
+
+            plan = Plan.objects.filter(stripe_plan_id=price_id).first() if price_id else None
+
+            # Campos comunes
+            status_value = sub.get('status') or ''
+            cancel_flag = sub.get('cancel_at_period_end') or False
+            cpe = sub.get('current_period_end')
+            current_period_end = dt.datetime.fromtimestamp(cpe, tz=dt.timezone.utc) if cpe else None
+            is_active = status_value in ['active', 'trialing'] and not sub.get('canceled_at')
+
+            # Upsert de la fila local
+            sub_obj, _ = MembershipSubscription.objects.update_or_create(
+                stripe_subscription_id=sub.get('id'),
+                defaults={
+                    'user_profile': profile,
+                    'plan': plan,
+                    'status': status_value,
+                    'cancel_at_period_end': cancel_flag,
+                    'current_period_end': current_period_end,
+                    'is_active': is_active,
+                }
+            )
+
+            # Refrescar caché del perfil si lo encontramos
+            if profile:
+                try:
+                    profile.stripe_subscription_id = sub.get('id')
+                    profile.subscription_status = status_value
+                    profile.subscription_current_period_end = current_period_end
+                    profile.cancel_at_period_end = cancel_flag
+                    profile.current_subscription = sub_obj
+                    profile.save()
+                except Exception:
+                    pass
+
+            return Response({'received': True}, status=status.HTTP_200_OK)
+
+
 
         logger.info(f"Webhook recibido: {event_type}, Event ID: {event.id}")
 
