@@ -14,11 +14,27 @@ def validate_image_size(value):
         raise ValidationError("Max file size is %sMB" % str(megabyte_limit))
 
 
+class Role(models.Model):
+    code = models.SlugField(max_length=50, unique=True, verbose_name='Code')
+    name = models.CharField(max_length=100, verbose_name='Name')
+    description = models.TextField(blank=True, default='', verbose_name='Description')
+    is_admin = models.BooleanField(default=False, verbose_name='Is Admin')
+
+    def __str__(self) -> str:
+        return self.name or self.code
+
+    class Meta:
+        verbose_name = 'Role'
+        verbose_name_plural = 'Roles'
+
+
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     username = None
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=30, verbose_name='Name')
     last_name = models.CharField(max_length=30, verbose_name='Last Name')
+    role = models.ForeignKey('Role', null=True, blank=True, on_delete=models.SET_NULL, related_name='users', verbose_name='Role')
+    invited_by = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='invited_users', verbose_name='Invited By')
     is_staff = models.BooleanField(default=False, verbose_name='Is Staff')
     is_active = models.BooleanField(default=True, verbose_name='Is Active')
     date_joined = models.DateTimeField(default=timezone.now, verbose_name='Date Joined')
@@ -30,6 +46,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self) -> str:
         return self.email
+
+    @property
+    def role_code(self):
+        return getattr(self.role, 'code', None)
+
+    @property
+    def is_admin(self):
+        # Superusers are always considered admins
+        return bool(getattr(self.role, 'is_admin', False) or self.is_superuser)
     
     class Meta:
         verbose_name = 'User'
@@ -38,12 +63,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
-
     introduction_headline = models.TextField(max_length=220, null=True, blank=True)
     alias_title = models.CharField(max_length=50, null=True, blank=True)
     profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics', null=True, blank=True,
                                         validators=[validate_image_size])
-
     birthday = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=25, null=True, blank=True)
     city = models.CharField(max_length=100, null=True, blank=True)
@@ -54,13 +77,19 @@ class UserProfile(models.Model):
     bio_presentation = models.CharField(max_length=250, blank=True, null=True)
     biography = models.TextField(blank=True, null=True)
     pic_footer = models.CharField(max_length=250, blank=True, null=True)
+    #admin profile v1
+    life_partner_name  = models.CharField(max_length=150, blank=True, null=True)
+    life_partner_lastname = models.CharField(max_length=150, blank=True, null=True)
+    postal_address = models.TextField(null=True, blank=True)
+    often_in = models.TextField(null=True, blank=True)
+    guiding_principle = models.CharField(max_length=50, null=True, blank=True)
+    annual_limits_introduction = models.IntegerField(null=True, blank=True, default=0)
+    receive_reports = models.BooleanField(default=False)
 
     stripe_subscription_id = models.CharField(max_length=100, blank=True, null=True)
     subscription_status = models.CharField(max_length=20, blank=True, null=True)
     subscription_current_period_end = models.DateTimeField(blank=True, null=True)
     cancel_at_period_end = models.BooleanField(default=False)
-
-    #nobilis_suscription =
 
     stripe_customer_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_payment_method_id = models.CharField(max_length=100, blank=True, null=True)
@@ -120,6 +149,36 @@ class UserProfile(models.Model):
          self.cancel_at_period_end = False
          self.current_subscription = None
          self.save()
+
+
+# class AdminProfile(models.Model):
+#     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+#
+#     introduction_headline = models.TextField(max_length=220, null=True, blank=True)
+#     alias_title = models.CharField(max_length=50, null=True, blank=True)
+#     profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics', null=True, blank=True,
+#                                         validators=[validate_image_size])
+#
+#     birthday = models.DateField(null=True, blank=True)
+#     phone_number = models.CharField(max_length=25, null=True, blank=True)
+#     residence_city = models.CharField(max_length=100, null=True, blank=True)
+#     postal_code = models.CharField(max_length=10, null=True, blank=True)
+#     prefered_phone = models.BooleanField(default=False)
+#     prefered_email = models.BooleanField(default=False)
+#     postal_address = models.TextField(null=True, blank=True)
+#     often_in = models.TextField(null=True, blank=True)
+#     languages = models.TextField(blank=True, null=True)
+#     bio_presentation = models.CharField(max_length=250, blank=True, null=True)
+#     biography = models.TextField(blank=True, null=True)
+#     pic_footer = models.CharField(max_length=250, blank=True, null=True)
+#     guiding_principle = models.CharField(max_length=50, null=True, blank=True)
+#
+#
+#     def __str__(self):
+#         return f'{self.user} Admin Profile'
+#
+#     class Meta:
+#         verbose_name_plural = 'Admin Profiles'
 
 
 class SocialMediaProfile(models.Model):

@@ -2,6 +2,31 @@ from django.db import models
 from django.conf import settings
 
 
+class IntroductionCatalog(models.Model):
+    title = models.CharField(max_length=100)
+    description = models.TextField(null=True, blank=True)
+    cost =models.DecimalField(decimal_places=2, max_digits=10, null=True, blank=True)
+    stripe_product_id = models.CharField(max_length=100, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        verbose_name_plural = "Introduction Catalog"
+
+
+class IntroductionStatus(models.Model):
+    status_name = models.CharField(max_length=100)
+    description = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return self.status_name
+
+    class Meta:
+        verbose_name_plural = "Introduction Status"
+
+
 class Plan(models.Model):
     title = models.CharField(max_length=100, verbose_name="Title")
     color = models.CharField(max_length=20, verbose_name="Color")
@@ -61,6 +86,26 @@ class ShippingAddress(models.Model):
         verbose_name_plural = "Shippings"
 
 
+class UserInvitation(models.Model):
+    email = models.EmailField()
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_invitations')
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    invited_user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='invitations_received')
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['email']),
+            models.Index(fields=['token']),
+        ]
+        unique_together = ('email', 'invited_by')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Invitation to {self.email} by {self.invited_by_id}"
+
+
 class MembershipSubscription(models.Model):
     user_profile = models.ForeignKey('nsocial.UserProfile', on_delete=models.CASCADE, related_name='subscriptions')
     plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True)
@@ -80,3 +125,51 @@ class MembershipSubscription(models.Model):
 
     def __str__(self):
         return f"Sub {self.stripe_subscription_id} ({self.status})"
+
+
+class MemberIntroduction(models.Model):
+    introduction_type = models.ForeignKey(IntroductionCatalog, on_delete=models.CASCADE, null=False, blank=False)
+    from_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, blank=False, related_name='+')
+    to_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, blank=False, related_name='+')
+    topic = models.CharField(max_length=100, null=False, blank=False)
+    message = models.TextField(null=False, blank=False)
+    status = models.ForeignKey(IntroductionStatus, on_delete=models.CASCADE, null=False, blank=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.introduction_type.title
+
+    class Meta:
+        verbose_name = "Introduction"
+        verbose_name_plural = "Introductions"
+
+
+class InviteeQualificationCatalog(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Invitee Qualification"
+        verbose_name_plural = "Invitee Qualifications"
+
+    def __str__(self):
+        return self.name
+
+
+class MemberReferral(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone_number = models.CharField(max_length=30)
+    invitee_qualification = models.ForeignKey(InviteeQualificationCatalog, on_delete=models.PROTECT, related_name='referrals')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='member_referrals')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Member Referral"
+        verbose_name_plural = "Member Referrals"
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.email})"

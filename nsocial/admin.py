@@ -14,7 +14,7 @@ from nsocial.models import (
     Expertise,
     UserVideo,
     Experience,
-    Author
+    Author, Role
 )
 
 
@@ -38,3 +38,4 @@ admin.site.register(Expertise)
 admin.site.register(UserVideo)
 admin.site.register(Experience)
 admin.site.register(Author)
+admin.site.register(Role)

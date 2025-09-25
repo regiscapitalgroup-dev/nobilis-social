@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 # Create your models here.
 class InviteTmpToken(models.Model):
@@ -35,3 +36,49 @@ class LanguageCatalog(models.Model):
         verbose_name = "Language"
         verbose_name_plural = "Languages"
         ordering = ['name']
+
+
+class RelationshipCatalog(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Relationship'
+        verbose_name_plural = 'Relationships'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Relative(models.Model):
+    """Represents a relative/family member linked to a user."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='relatives')
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100, blank=True, default='')
+    year_of_birth = models.IntegerField(null=True, blank=True)
+    relationship = models.ForeignKey('RelationshipCatalog', on_delete=models.PROTECT, related_name='relatives')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Relative'
+        verbose_name_plural = 'Relatives'
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}" if self.last_name else self.first_name
+
+
+class SupportAgent(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Support Agent Name")
+    email = models.EmailField(max_length=255, verbose_name="Support Agent Email")
+    phone_number = models.CharField(max_length=255, verbose_name="Support Agent Phone Number")
+
+    aviable_until = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = 'Support Agent'
+        verbose_name_plural = 'Support Agents'

@@ -22,6 +22,9 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('api.urls')),
+    path('api/v1/members/', include('membership.urls')),
+    path('api/v1/waitinglist/', include('waitinglist.urls')),
+    #path('api/v1/nsocial/', include('nsocial.urls')),
 ]
 
 if settings.DEBUG:

@@ -1,11 +1,13 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from membership.models import Plan, MembershipSubscription
+from membership.models import Plan, MembershipSubscription, IntroductionCatalog, IntroductionStatus, MemberIntroduction, InviteeQualificationCatalog, MemberReferral
 from django.utils.decorators import method_decorator
 from membership.serializers import (PriceSerializer, SubscriptionCreateSerializer,
                                     SubscriptionStatusSerializer, PlanNobilisSerializer, PlanNobilisPriceSerializer,
-                                    ShippingAddressSerializer, MembershipSubscriptionSerializer)
+                                    ShippingAddressSerializer, MembershipSubscriptionSerializer, UserInvitationSerializer, DependentUserSerializer,
+                                    IntroductionCatalogSerializer, IntroductionStatusSerializer, MemberIntroductionSerializer,
+                                    InviteeQualificationCatalogSerializer, MemberReferralSerializer)
 from nsocial.models import UserProfile
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -14,6 +16,10 @@ import stripe
 from django.utils import timezone
 import datetime as dt
 from django.conf import settings
+from django.db import models
+from django.db.models import Min
+from django.contrib.auth import get_user_model
+from decimal import Decimal
 
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -626,6 +632,102 @@ class StripeWebhookView(APIView):
         return Response(status=status.HTTP_200_OK)
 
 
+class MembersSubscriptionsOverviewView(APIView):
+    """
+    Devuelve solo métricas agregadas:
+    - total_members: número total de miembros con alguna suscripción registrada
+    - total_active_members: número total de miembros con suscripción activa o en trial
+    - total_inactive_members: número total de miembros con suscripción no activa
+    - total_new_subscribers_this_month: número total de miembros nuevos con suscripción creada en el mes actual
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Inicio del mes actual (en zona temporal del servidor)
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # Base queryset
+        qs = MembershipSubscription.objects.all()
+
+        # Miembros totales (distintos perfiles con al menos una suscripción)
+        total_members = qs.values('user_profile').distinct().count()
+
+        # Activos por flag is_active o por estado en ['active', 'trialing']
+        active_statuses = ['active', 'trialing']
+        active_members_qs = qs.filter(models.Q(is_active=True) | models.Q(status__in=active_statuses))
+        total_active_members = active_members_qs.values('user_profile').distinct().count()
+
+        # Inactivos = miembros totales - activos (evita doble conteo si hay múltiples suscripciones)
+        total_inactive_members = max(total_members - total_active_members, 0)
+
+        # Nuevos suscriptores en el mes actual (miembros únicos con suscripción creada este mes)
+        new_this_month_qs = qs.filter(created_at__gte=month_start)
+        total_new_subscribers_this_month = new_this_month_qs.values('user_profile').distinct().count()
+
+        data = {
+            'total_members': total_members,
+            'total_active_members': total_active_members,
+            'total_inactive_members': total_inactive_members,
+            'total_new_subscribers_this_month': total_new_subscribers_this_month,
+        }
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class MembersListView(APIView):
+    """
+    Lista de miembros con:
+    - user_id
+    - full_name
+    - email
+    - became_member_at (fecha en que se convirtió en miembro: primera suscripción)
+    - plan_name (nombre del plan Nobilis actual o 'inactive' si no está activo)
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Perfiles que tienen al menos una suscripción
+        profiles_qs = (
+            UserProfile.objects
+            .filter(subscriptions__isnull=False)
+            .select_related('user')
+            .prefetch_related(
+                models.Prefetch(
+                    'subscriptions',
+                    queryset=MembershipSubscription.objects.select_related('plan').order_by('-created_at')
+                )
+            )
+            .annotate(became_member_at=Min('subscriptions__created_at'))
+            .distinct()
+        )
+
+        active_statuses = ['active', 'trialing']
+        results = []
+        for profile in profiles_qs:
+            user = profile.user
+            # Seleccionar la suscripción "actual" desde las prefeteadas: la más reciente activa/trialing
+            subs = list(getattr(profile, 'subscriptions').all())
+            current_sub = next((s for s in subs if (getattr(s, 'is_active', False) or getattr(s, 'status', None) in active_statuses)), None)
+            is_active = False
+            plan_name = 'inactive'
+            if current_sub:
+                sub_status = getattr(current_sub, 'status', None)
+                is_active = getattr(current_sub, 'is_active', False) or (sub_status in active_statuses)
+                if is_active and getattr(current_sub, 'plan', None):
+                    plan_name = getattr(current_sub.plan, 'title', 'inactive') or 'inactive'
+            results.append({
+                'user_id': getattr(user, 'id', None),
+                'full_name': f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip(),
+                'email': getattr(user, 'email', None),
+                'became_member_at': getattr(profile, 'became_member_at', None),
+                'plan_name': plan_name,
+            })
+
+        # Orden opcional por became_member_at desc si se desea
+        results.sort(key=lambda x: (x['became_member_at'] is not None, x['became_member_at']), reverse=True)
+        return Response(results, status=status.HTTP_200_OK)
+
+
 class PlanNobilis(generics.ListAPIView):
     serializer_class = PlanNobilisSerializer
     permission_classes = [permissions.AllowAny]
@@ -673,7 +775,8 @@ class AccountOverviewView(APIView):
 
     def get(self, request, *args, **kwargs):
         user = request.user
-        profile = None # Inicializar perfil
+        profile = None  # Inicializar perfil
+        profile_picture_url = None  # Inicializar URL de imagen de perfil
 
         # 1. Obtener Datos Básicos del Usuario
         user_data = {
@@ -681,14 +784,22 @@ class AccountOverviewView(APIView):
             'email': user.email,
             'first_name': user.first_name,
             'last_name': user.last_name,
+            'role': getattr(user, 'role_code', None),
             # Puedes añadir más campos del User si los necesitas
         }
 
         # 2. Obtener Datos de la Suscripción
-        subscription_data = None # Inicializar datos de suscripción
+        subscription_data = None  # Inicializar datos de suscripción
 
         try:
             profile = get_object_or_404(UserProfile, user=user)
+            # Construir URL absoluta de la foto de perfil si existe
+            try:
+                if getattr(profile, 'profile_picture', None) and getattr(profile.profile_picture, 'url', None):
+                    profile_picture_url = request.build_absolute_uri(profile.profile_picture.url)
+            except Exception:
+                profile_picture_url = None
+
             subscription_id = profile.stripe_subscription_id
 
             if not subscription_id:
@@ -744,12 +855,38 @@ class AccountOverviewView(APIView):
             # Podríamos devolver un error 500 aquí, o intentar devolver al menos los datos del usuario
             subscription_data = {"status": "error", "message": "An unexpected error occurred."}
 
+        # Añadir la URL de la foto de perfil al bloque de usuario
+        user_data['profile_picture'] = profile_picture_url
+
         response_data = {
             "user": user_data,
-            "subscription": subscription_data # Será el objeto serializado o un estado/mensaje
+            "subscription": subscription_data  # Será el objeto serializado o un estado/mensaje
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+class InvitationListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        if not getattr(user, 'is_admin', False):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        from membership.models import UserInvitation
+        qs = UserInvitation.objects.filter(invited_by=user).order_by('-created_at')
+        serializer = UserInvitationSerializer(qs, many=True)
+        return Response({'status': True, 'data': serializer.data}, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        if not getattr(user, 'is_admin', False):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = UserInvitationSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            inv = serializer.save()
+            return Response({'status': True, 'data': UserInvitationSerializer(inv).data}, status=status.HTTP_201_CREATED)
+        return Response({'status': False, 'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ShippingAddressView(generics.RetrieveUpdateDestroyAPIView):
@@ -758,3 +895,228 @@ class ShippingAddressView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_object(self):
         return self.request.user.shipping
+
+
+class DependentsListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        User = get_user_model()
+        dependents_qs = User.objects.filter(invited_by=request.user).order_by('-date_joined')
+        serializer = DependentUserSerializer(dependents_qs, many=True)
+        return Response({
+            'status': True,
+            'count': len(serializer.data),
+            'data': serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """Allow read-only access to authenticated users; write access only to admins."""
+    def has_permission(self, request, view):
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return request.user and request.user.is_authenticated
+        # For write methods, require admin
+        return request.user and request.user.is_authenticated and getattr(request.user, 'is_admin', False)
+
+
+class IntroductionCatalogListCreateView(generics.ListCreateAPIView):
+    queryset = IntroductionCatalog.objects.all().order_by('-created_at')
+    serializer_class = IntroductionCatalogSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class IntroductionCatalogDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = IntroductionCatalog.objects.all()
+    serializer_class = IntroductionCatalogSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class IntroductionStatusListCreateView(generics.ListCreateAPIView):
+    queryset = IntroductionStatus.objects.all().order_by('status_name')
+    serializer_class = IntroductionStatusSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class IntroductionStatusDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = IntroductionStatus.objects.all()
+    serializer_class = IntroductionStatusSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class InvolvedOrAdmin(permissions.BasePermission):
+    """Allow access if user is admin or involved (from_user or to_user)."""
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, 'is_admin', False):
+            return True
+        return (obj.from_user_id == user.id) or (obj.to_user_id == user.id)
+
+
+class MemberIntroductionListCreateView(generics.ListCreateAPIView):
+    serializer_class = MemberIntroductionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = MemberIntroduction.objects.all().order_by('-created_at')
+        if getattr(user, 'is_admin', False):
+            return qs
+        return qs.filter(models.Q(from_user=user) | models.Q(to_user=user))
+
+    # --- Stripe payment subroutine ---
+    def _process_introduction_payment(self, user, intro_type):
+        """
+        Creates and confirms a Stripe PaymentIntent for the selected introduction type.
+        Uses user's saved Stripe customer and payment method. Returns a dict with success flag and
+        optional error payload. Includes intro_type.stripe_product_id as a product identifier in metadata.
+        """
+        # If cost is empty or zero, nothing to charge
+        cost = intro_type.cost or 0
+        try:
+            cost_decimal = Decimal(str(cost))
+        except Exception:
+            cost_decimal = Decimal('0')
+        if cost_decimal <= 0:
+            return {"success": True}
+
+        # Fetch user profile to get Stripe IDs
+        try:
+            profile = UserProfile.objects.get(user=user)
+        except UserProfile.DoesNotExist:
+            return {
+                "success": False,
+                "status": status.HTTP_400_BAD_REQUEST,
+                "error": {"detail": "User profile not found. Cannot process payment."}
+            }
+
+        if not profile.stripe_customer_id or not profile.stripe_payment_method_id:
+            return {
+                "success": False,
+                "status": status.HTTP_400_BAD_REQUEST,
+                "error": {"detail": "Missing Stripe payment setup. Please add a payment method."}
+            }
+
+        amount_cents = int((cost_decimal * 100).quantize(Decimal('1')))
+        try:
+            pi = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency='usd',
+                customer=profile.stripe_customer_id,
+                payment_method=profile.stripe_payment_method_id,
+                confirm=True,
+                off_session=True,
+                description=f"Member introduction: {intro_type.title}",
+                metadata={
+                    'stripe_product_id': intro_type.stripe_product_id or '',
+                    'introduction_type_id': str(intro_type.id),
+                    'user_id': str(user.id),
+                }
+            )
+            if pi.status == 'succeeded':
+                return {"success": True}
+            # If requires action or not succeeded
+            return {
+                "success": False,
+                "status": status.HTTP_402_PAYMENT_REQUIRED,
+                "error": {"detail": f"Payment not completed (status: {pi.status})."}
+            }
+        except stripe.error.CardError as e:
+            return {
+                "success": False,
+                "status": status.HTTP_402_PAYMENT_REQUIRED,
+                "error": {"detail": f"Card error: {e.user_message or str(e)}"}
+            }
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error processing introduction payment for user {user.id}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "status": status.HTTP_502_BAD_GATEWAY,
+                "error": {"detail": "Stripe service error while processing payment."}
+            }
+        except Exception as e:
+            logger.exception(f"Unexpected error processing introduction payment for user {user.id}: {e}")
+            return {
+                "success": False,
+                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "error": {"detail": "Unexpected error while processing payment."}
+            }
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        intro_type = serializer.validated_data.get('introduction_type')
+
+        # Process payment before creating the record
+        payment_result = self._process_introduction_payment(request.user, intro_type)
+        if not payment_result.get('success'):
+            return Response(payment_result.get('error'), status=payment_result.get('status', status.HTTP_400_BAD_REQUEST))
+
+        # Payment succeeded or not required; proceed to create
+        instance = serializer.save(from_user=request.user)
+        output = self.get_serializer(instance)
+        headers = self.get_success_headers(output.data)
+        return Response(output.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class MemberIntroductionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = MemberIntroductionSerializer
+    permission_classes = [permissions.IsAuthenticated, InvolvedOrAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = MemberIntroduction.objects.all()
+        if getattr(user, 'is_admin', False):
+            return qs
+        return qs.filter(models.Q(from_user=user) | models.Q(to_user=user))
+
+
+class ReferralOwnerOrAdmin(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, 'is_admin', False):
+            return True
+        return getattr(obj, 'created_by_id', None) == user.id
+
+
+class InviteeQualificationCatalogListCreateView(generics.ListCreateAPIView):
+    queryset = InviteeQualificationCatalog.objects.all().order_by('-created_at')
+    serializer_class = InviteeQualificationCatalogSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class InviteeQualificationCatalogDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = InviteeQualificationCatalog.objects.all()
+    serializer_class = InviteeQualificationCatalogSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class MemberReferralListCreateView(generics.ListCreateAPIView):
+    serializer_class = MemberReferralSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = MemberReferral.objects.all().order_by('-created_at')
+        if getattr(user, 'is_admin', False):
+            return qs
+        return qs.filter(created_by=user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class MemberReferralDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = MemberReferralSerializer
+    permission_classes = [permissions.IsAuthenticated, ReferralOwnerOrAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = MemberReferral.objects.all()
+        if getattr(user, 'is_admin', False):
+            return qs
+        return qs.filter(created_by=user)

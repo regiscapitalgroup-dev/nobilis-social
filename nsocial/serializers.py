@@ -15,7 +15,8 @@ from nsocial.models import (
     Expertise,
     UserVideo,
     Experience,
-    Author
+    Author,
+    Role
 )
 import stripe
 import logging
@@ -24,6 +25,13 @@ import json
 from django.contrib.auth.password_validation import validate_password
 
 logger = logging.getLogger(__name__)
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ['id', 'code', 'name', 'description', 'is_admin']
+        read_only_fields = ['id']
 
 class CustomUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, style={'input_type': 'password'})
@@ -194,6 +202,8 @@ class AuthorSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'photo_url']
 
 
+
+
 class FullProfileSerializer(UserProfileSerializer):
     personal_detail = PersonalDetailSerializer(required=False)
     professional_profile = ProfessionalProfileSerializer(required=False)
@@ -271,11 +281,31 @@ class FullProfileSerializer(UserProfileSerializer):
             return {"status": "error", "message": "Could not retrieve subscription details."}
 
     def update(self, instance, validated_data):
-        instance.bio_presentation = validated_data.get('bio_presentation', instance.bio_presentation)
-        instance.biography = validated_data.get('biography', instance.biography)
+        # 1) Extraer bloques anidados para no interferir con campos simples
+        personal_data = validated_data.pop('personal_detail', None)
+        professional_data = validated_data.pop('professional_profile', None)
+        recognition_data = validated_data.pop('recognition', None)
+        expertise_data = validated_data.pop('expertise', None)
+
+        # 2) Actualizar campos simples del UserProfile presentes en el payload
+        simple_fields = [
+            'introduction_headline', 'alias_title', 'birthday', 'phone_number', 'city',
+            'postal_code', 'languages', 'bio_presentation', 'biography', 'pic_footer',
+            'postal_address', 'guiding_principle',
+            'often_in',
+            'life_partner_name',
+            'life_partner_lastname',
+            'annual_limits_introduction',
+            'receive_reports',
+        ]
+        for field in simple_fields:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
         instance.save()
 
         def update_or_create_one_to_one(model, serializer, related_name, data):
+            if data is None:
+                return getattr(instance, related_name, None)
             obj, created = model.objects.update_or_create(
                 user_profile=instance,
                 defaults=data
@@ -283,45 +313,45 @@ class FullProfileSerializer(UserProfileSerializer):
             return obj
 
         # Helper para manejar listas (borrar y recrear es lo más simple)
-        def update_many_related(model, serializer, parent_instance, related_name, data):
+        def update_many_related(model, parent_instance, fk_field_name, related_name, data):
+            if data is None:
+                return
             # Borramos los objetos existentes
             getattr(parent_instance, related_name).all().delete()
-            # Creamos los nuevos
+            # Creamos los nuevos usando el nombre correcto del FK
             for item_data in data:
-                model.objects.create(**{parent_instance.__class__.__name__.lower(): parent_instance}, **item_data)
+                model.objects.create(**{fk_field_name: parent_instance}, **item_data)
 
-        # Personal Details y Clubs
-        if 'personal_detail' in validated_data:
-            personal_data = validated_data.pop('personal_detail')
-            clubs_data = personal_data.pop('clubs')
-            personal_detail_obj = update_or_create_one_to_one(PersonalDetail, PersonalDetailSerializer,
-                                                              'personal_detail', personal_data)
-            update_many_related(Club, ClubSerializer, personal_detail_obj, 'clubs', clubs_data)
+        # 3) Personal Details y Clubs
+        if personal_data is not None:
+            clubs_data = personal_data.pop('clubs', [])
+            personal_detail_obj = update_or_create_one_to_one(
+                PersonalDetail, PersonalDetailSerializer, 'personal_detail', personal_data
+            )
+            if personal_detail_obj:
+                update_many_related(Club, personal_detail_obj, 'personal_detail', 'clubs', clubs_data)
 
-        # Professional Profile y sus listas
-        if 'professional_profile' in validated_data:
-            prof_data = validated_data.pop('professional_profile')
-            work_data = prof_data.pop('work_positions')
-            edu_data = prof_data.pop('education')
-            board_data = prof_data.pop('on_board')
-            non_profit_data = prof_data.pop('non_profit_involvement')
-            prof_profile_obj = update_or_create_one_to_one(ProfessionalProfile, ProfessionalProfileSerializer,
-                                                           'professional_profile', prof_data)
-            update_many_related(WorkPosition, WorkPositionSerializer, prof_profile_obj, 'work_positions', work_data)
-            update_many_related(Education, EducationSerializer, prof_profile_obj, 'education', edu_data)
-            update_many_related(BoardPosition, BoardPositionSerializer, prof_profile_obj, 'on_board', board_data)
-            update_many_related(NonProfitInvolvement, NonProfitInvolvementSerializer, prof_profile_obj,
-                                'non_profit_involvement', non_profit_data)
+        # 4) Professional Profile y sus listas
+        if professional_data is not None:
+            work_data = professional_data.pop('work_positions', [])
+            edu_data = professional_data.pop('education', [])
+            board_data = professional_data.pop('on_board', [])
+            non_profit_data = professional_data.pop('non_profit_involvement', [])
+            prof_profile_obj = update_or_create_one_to_one(
+                ProfessionalProfile, ProfessionalProfileSerializer, 'professional_profile', professional_data
+            )
+            if prof_profile_obj:
+                update_many_related(WorkPosition, prof_profile_obj, 'professional_profile', 'work_positions', work_data)
+                update_many_related(Education, prof_profile_obj, 'professional_profile', 'education', edu_data)
+                update_many_related(BoardPosition, prof_profile_obj, 'professional_profile', 'on_board', board_data)
+                update_many_related(NonProfitInvolvement, prof_profile_obj, 'professional_profile', 'non_profit_involvement', non_profit_data)
 
-        # Recognition
-        if 'recognition' in validated_data:
-            rec_data = validated_data.pop('recognition')
-            update_or_create_one_to_one(Recognition, RecognitionSerializer, 'recognition', rec_data)
+        # 5) Recognition (1-1)
+        if recognition_data is not None:
+            update_or_create_one_to_one(Recognition, RecognitionSerializer, 'recognition', recognition_data)
 
-        # Expertise
-        if 'expertise' in validated_data:
-            expertise_data = validated_data.pop('expertise')
-            # Para Expertise, que es ForeignKey directo a UserProfile
+        # 6) Expertise (FK directo a UserProfile)
+        if expertise_data is not None:
             instance.expertise.all().delete()
             for item_data in expertise_data:
                 Expertise.objects.create(user_profile=instance, **item_data)
@@ -369,3 +399,35 @@ class ExperienceSerializer(serializers.ModelSerializer):
                 author_objs.append(author_obj)
             instance.authors.set(author_objs)
         return instance
+
+class AdminProfileSerializer(FullProfileSerializer):
+    """
+    AdminProfile now includes the entire FullProfile plus a read-only list of the user's relatives.
+    Allows full updates (PUT) using the same nested structure as FullProfileSerializer.
+    """
+    # Make often_in editable via AdminProfile (list of places stored as comma-separated text)
+    often_in = CommaSeparatedArrayField(required=False)
+    relatives = serializers.SerializerMethodField(read_only=True)
+
+    class Meta(FullProfileSerializer.Meta):
+        fields = FullProfileSerializer.Meta.fields + [
+            'guiding_principle',
+            'postal_address',
+            'often_in',
+            'life_partner_name',
+            'life_partner_lastname',
+            'annual_limits_introduction',
+            'receive_reports',
+            'relatives']
+
+    def get_relatives(self, obj):
+        # Import here to avoid circular import at module load
+        from api.serializers import RelativeSerializer
+        try:
+            user = obj.user
+            qs = getattr(user, 'relatives', None)
+            if qs is None:
+                return []
+            return RelativeSerializer(qs.all().order_by('-created_at'), many=True).data
+        except Exception:
+            return []

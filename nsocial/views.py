@@ -6,9 +6,11 @@ from .serializers import (
     SocialMediaProfileSerializer,
     FullProfileSerializer,
     UserVideoSerializer,
-    ExperienceSerializer
+    ExperienceSerializer,
+    RoleSerializer,
+    AdminProfileSerializer
 )
-from .models import CustomUser, UserProfile, SocialMediaProfile, Experience
+from .models import CustomUser, UserProfile, SocialMediaProfile, Experience, Role
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
@@ -209,6 +211,18 @@ class SocialMediaProfileRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroy
         return SocialMediaProfile.objects.filter(user_profile=self.request.user.profile)
 
 
+class AdminProfileView(generics.RetrieveUpdateAPIView):
+    """
+    View to retrieve/update only postal_address and often_in, including relatives list (read-only).
+    """
+    serializer_class = AdminProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+
 class FullProfileView(generics.RetrieveUpdateAPIView):
     """
     Vista para ver y actualizar el perfil completo del usuario autenticado.
@@ -257,3 +271,46 @@ class ExperienceListView(generics.ListAPIView):
     queryset = Experience.objects.all()
     serializer_class = ExperienceSerializer
     permission_classes = [AllowAny]
+
+
+class IsAdminOrReadOnly(generics.GenericAPIView):
+    def has_permission(self, request, view=None):
+        # Note: we can't subclass BasePermission without importing; implement inline check in views instead
+        return True
+
+
+class RoleListCreateView(generics.ListCreateAPIView):
+    queryset = Role.objects.all().order_by('code')
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        # Authenticated users can list roles
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        # Only admins can create
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        return super().post(request, *args, **kwargs)
+
+
+class RoleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        return super().patch(request, *args, **kwargs)
+
+    def put(self, request, *args, **kwargs):
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        return super().put(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+        return super().delete(request, *args, **kwargs)

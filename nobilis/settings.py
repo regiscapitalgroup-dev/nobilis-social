@@ -48,12 +48,14 @@ CSRF_TRUSTED_ORIGINS = [
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'rest_framework',
     "corsheaders",
     'rest_framework_simplejwt',
@@ -62,6 +64,7 @@ INSTALLED_APPS = [
     'api',
     'nsocial',
     'membership',
+    'notification',
 ]
 
 MIDDLEWARE = [
@@ -95,7 +98,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'nobilis.wsgi.application'
+ASGI_APPLICATION = 'nobilis.asgi.application'
 
+# Channels configuration
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -276,3 +286,9 @@ if all([ADMIN_USER_NAME, ADMIN_USER_EMAIL]):
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET')
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
+    }
+}

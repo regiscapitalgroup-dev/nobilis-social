@@ -15,5 +15,5 @@ membership/migrations/__pycache__
 static
 staticfiles
 media
-.env*
+.env
 db.sqlite3

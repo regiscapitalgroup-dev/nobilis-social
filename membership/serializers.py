@@ -1,10 +1,27 @@
 from rest_framework import serializers
-from membership.models import Plan, ShippingAddress, MembershipSubscription
+from membership.models import Plan, ShippingAddress, MembershipSubscription, UserInvitation, IntroductionCatalog, IntroductionStatus, MemberIntroduction, InviteeQualificationCatalog, MemberReferral
 import datetime
 import logging # Para logs en to_representation si es necesario
 import stripe
+from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
+
+# Serializer para listar dependientes (usuarios invitados por el usuario en sesión)
+User = get_user_model()
+
+class DependentUserSerializer(serializers.ModelSerializer):
+    invited_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'date_joined', 'invited_by']
+        read_only_fields = fields
+
+    def get_role(self, obj):
+        # Return the role code if present
+        return getattr(getattr(obj, 'role', None), 'code', None)
 
 
 class PaymentMethodSetupSerializer(serializers.Serializer):
@@ -182,6 +199,22 @@ class PlanBriefSerializer(serializers.ModelSerializer):
         model = Plan
         fields = ['id', 'title', 'description', 'price', 'interval', 'price_description', 'features', 'stripe_plan_id']
 
+class UserInvitationSerializer(serializers.ModelSerializer):
+    invited_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = UserInvitation
+        fields = ['id', 'email', 'invited_by', 'token', 'created_at', 'accepted_at', 'invited_user']
+        read_only_fields = ['id', 'invited_by', 'token', 'created_at', 'accepted_at', 'invited_user']
+
+    def create(self, validated_data):
+        from secrets import token_urlsafe
+        request = self.context.get('request')
+        inviter = request.user if request else None
+        token = token_urlsafe(32)
+        return UserInvitation.objects.create(invited_by=inviter, token=token, **validated_data)
+
+
 class MembershipSubscriptionSerializer(serializers.ModelSerializer):
     plan = PlanBriefSerializer(read_only=True)
 
@@ -191,3 +224,60 @@ class MembershipSubscriptionSerializer(serializers.ModelSerializer):
             'id', 'stripe_subscription_id', 'status', 'current_period_end', 'cancel_at_period_end',
             'is_active', 'created_at', 'plan'
         ]
+
+
+class IntroductionCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IntroductionCatalog
+        fields = ['id', 'title', 'description', 'cost', 'stripe_product_id', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class IntroductionStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IntroductionStatus
+        fields = ['id', 'status_name', 'description']
+        read_only_fields = ['id']
+
+
+class MemberIntroductionSerializer(serializers.ModelSerializer):
+    from_user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = MemberIntroduction
+        fields = [
+            'id', 'introduction_type', 'from_user', 'to_user', 'topic', 'message',
+            'status', 'created_at'
+        ]
+        read_only_fields = ['id', 'from_user', 'created_at']
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            validated_data['from_user'] = request.user
+        return super().create(validated_data)
+
+
+class InviteeQualificationCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InviteeQualificationCatalog
+        fields = ['id', 'name', 'description', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class MemberReferralSerializer(serializers.ModelSerializer):
+    created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = MemberReferral
+        fields = [
+            'id', 'first_name', 'last_name', 'email', 'phone_number',
+            'invitee_qualification', 'created_by', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at']
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        return super().create(validated_data)
