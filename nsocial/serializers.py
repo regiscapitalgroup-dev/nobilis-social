@@ -210,6 +210,9 @@ class FullProfileSerializer(UserProfileSerializer):
     recognition = RecognitionSerializer(required=False)
     expertise = ExpertiseSerializer(many=True, required=False)
     videos = UserVideoSerializer(many=True, read_only=True)
+    # Admin fields now exposed in FullProfile
+    often_in = CommaSeparatedArrayField(required=False)
+    relatives = serializers.SerializerMethodField(read_only=True)
 
     subscription = serializers.SerializerMethodField()
     current_subscription = MembershipSubscriptionSerializer(read_only=True)
@@ -218,7 +221,10 @@ class FullProfileSerializer(UserProfileSerializer):
         model = UserProfile
         fields = UserProfileSerializer.Meta.fields + [
             'bio_presentation', 'biography', 'pic_footer', 'personal_detail', 'professional_profile',
-            'recognition', 'expertise', 'videos', 'subscription', 'current_subscription'
+            'recognition', 'expertise', 'videos', 'subscription', 'current_subscription',
+            # Admin-only fields now included in FullProfile
+            'guiding_principle', 'postal_address', 'often_in', 'life_partner_name', 'life_partner_lastname',
+            'annual_limits_introduction', 'receive_reports', 'relatives'
         ]
 
     def get_subscription(self, obj: UserProfile):
@@ -279,6 +285,18 @@ class FullProfileSerializer(UserProfileSerializer):
                 exc_info=True
             )
             return {"status": "error", "message": "Could not retrieve subscription details."}
+
+    def get_relatives(self, obj):
+        # Import here to avoid circular import at module load
+        from api.serializers import RelativeSerializer
+        try:
+            user = obj.user
+            qs = getattr(user, 'relatives', None)
+            if qs is None:
+                return []
+            return RelativeSerializer(qs.all().order_by('-created_at'), many=True).data
+        except Exception:
+            return []
 
     def update(self, instance, validated_data):
         # 1) Extraer bloques anidados para no interferir con campos simples
