@@ -9,7 +9,7 @@ urlpatterns = [
     path('api/v1/', include('api.urls')),
     path('api/v1/members/', include('membership.urls')),
     path('api/v1/waitinglist/', include('waitinglist.urls')),
-    path('health-check/',HeltChechView.as_view()),
+    path('', HeltChechView.as_view()),
 ]
 
 if settings.DEBUG:
