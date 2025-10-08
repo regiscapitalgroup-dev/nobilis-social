@@ -1,1 +1,1 @@
-web: gunicorn nobilis.wsgi
+web: daphne nobilis.asgi:application

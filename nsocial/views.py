@@ -8,7 +8,10 @@ from .serializers import (
     UserVideoSerializer,
     ExperienceSerializer,
     RoleSerializer,
-    AdminProfileSerializer
+    AdminProfileSerializer,
+    AdminProfileBasicSerializer,
+    AdminProfileConfidentialSerializer,
+    AdminProfileBiographySerializer,
 )
 from .models import CustomUser, UserProfile, SocialMediaProfile, Experience, Role
 from rest_framework import generics, status
@@ -223,6 +226,36 @@ class AdminProfileView(generics.RetrieveUpdateAPIView):
         return profile
 
 
+class AdminProfileBasicView(generics.RetrieveUpdateAPIView):
+    """
+    Endpoint: /api/admin-profile/basic/
+    Allows GET and PUT/PATCH to update basic admin profile fields:
+    alias_title, introduction_headline, postal_address, guiding_principle,
+    annual_limits_introduction, receive_reports, languages, introductions (setter).
+    """
+    serializer_class = AdminProfileBasicSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+
+class AdminProfileConfidentialView(generics.RetrieveUpdateAPIView):
+    """
+    Endpoint: /api/admin-profile/confidential/
+    Allows PUT/PATCH to update confidential fields of the admin profile:
+    birthday, phone_number, contact_methods, address, city_country, cities_of_interest,
+    partner {name, surname}, and relatives (replace list).
+    """
+    serializer_class = AdminProfileConfidentialSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        profile, _ = UserProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+
 class FullProfileView(generics.RetrieveUpdateAPIView):
     """
     Vista para ver y actualizar el perfil completo del usuario autenticado.
@@ -314,3 +347,77 @@ class RoleDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not getattr(request.user, 'is_admin', False):
             return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
         return super().delete(request, *args, **kwargs)
+
+
+
+class ProfilePictureUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def put(self, request):
+        file_obj = request.FILES.get('profile_picture') or request.data.get('profile_picture')
+        if not file_obj:
+            return Response({'detail': 'profile_picture is required'}, status=status.HTTP_400_BAD_REQUEST)
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        profile.profile_picture = file_obj
+        profile.save(update_fields=['profile_picture'])
+        # Devolver la ruta (URL) donde quedó accesible la imagen
+        path = getattr(profile.profile_picture, 'url', None)
+        return Response({"status": "ok", "path": path}, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        return self.put(request)
+
+
+class AdminProfileBiographyView(APIView):
+    """
+    Endpoint: /api/admin-profile/biography/
+    Accepts PUT/PATCH with JSON:
+    {
+        "biography": "...",
+        "urls": ["https://...", ...]
+    }
+    - Updates the current user's UserProfile.biography if provided.
+    - Replaces the user's UserVideo list with the provided URLs if provided.
+    Returns the resulting biography and urls.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _update(self, request):
+        serializer = AdminProfileBiographySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        # Update biography if present
+        if 'biiology' in data:  # safeguard typo won't ever trigger; real key below
+            pass
+        if 'biography' in data:
+            profile.biography = data.get('biography')
+            profile.save(update_fields=['biography'])
+
+        # Replace videos if urls provided
+        urls = data.get('urls', None)
+        if urls is not None:
+            # Delete existing videos
+            profile.videos.all().delete()
+            # Create new videos preserving input order
+            for url in urls:
+                try:
+                    profile.videos.create(video_link=url)
+                except Exception:
+                    # If a URL is malformed beyond URLField validation, skip silently
+                    continue
+
+        # Prepare response
+        current_urls = list(profile.videos.order_by('id').values_list('video_link', flat=True))
+        return Response({
+            'biography': profile.biography,
+            'urls': current_urls,
+        }, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request)

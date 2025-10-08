@@ -35,12 +35,10 @@ else:
     ALLOWED_HOSTS = [
         'localhost',
         '127.0.0.1',
-        'https://nobilis-social-4374f7463e87.herokuapp.com',
         'https://main.d1rykkcgalxqn2.amplifyapp.com',
     ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://nobilis-social-4374f7463e87.herokuapp.com',
     'https://main.d1rykkcgalxqn2.amplifyapp.com',
 ]
 
@@ -65,6 +63,7 @@ INSTALLED_APPS = [
     'nsocial',
     'membership',
     'notification',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -117,13 +116,13 @@ DATABASES = {
    }
 }
 
-#DATABASES = {
+# DATABASES = {
 #  'default': dj_database_url.config(
 #       default=config('DATABASE_URL'),
 #       conn_max_age=600,
 #       conn_health_checks=True,
 #     )
-#}
+# }
 
 
 # Password validation
@@ -171,10 +170,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 STORAGES = {
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': "storages.backends.s3.S3Storage",
         },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": "storages.backends.s3.S3Storage",
     },
 }
 
@@ -242,7 +241,7 @@ REST_FRAMEWORK = {
     ),
 }
 
-CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", cast=bool, default=False)
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", cast=bool, default=True)
 
 CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", cast=bool, default=True)
 
@@ -292,3 +291,11 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer"
     }
 }
+
+AWS_ACCESS_KEY_ID=config("AWS_ACCESS_KEY_ID", cast=str, default=None)
+AWS_SECRET_ACCESS_KEY=config("AWS_SECRET_ACCESS_KEY", cast=str, default=None)
+AWS_STORAGE_BUCKET_NAME=config("AWS_STORAGE_BUCKET_NAME", cast=str, default=None)
+AWS_S3_CUSTOM_DOMAIN= "%s.s3.amazonaws.com" % AWS_STORAGE_BUCKET_NAME
+AWS_S3_FILE_OVERWRITE = False
+
+

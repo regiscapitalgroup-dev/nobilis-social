@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent
+from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from nsocial.models import UserProfile
 
 
 class CityListSerializer(serializers.BaseSerializer):
@@ -49,3 +51,68 @@ class SupportAgentSerializer(serializers.ModelSerializer):
         model = SupportAgent
         fields = ['id', 'name', 'email', 'phone_number', 'aviable_until']
         read_only_fields = ['id']
+
+
+class IndustryCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndustryCatalog
+        fields = ['name']
+        #read_only_fields = ['id']
+
+
+class ProfessionalInterestCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProfessionalInterestCatalog
+        fields = ['id', 'name', 'active']
+        read_only_fields = ['id']
+
+
+class HobbyCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HobbyCatalog
+        fields = ['id', 'name', 'active']
+        read_only_fields = ['id']
+
+
+class ClubCatalogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClubCatalog
+        fields = ['id', 'name', 'city', 'active']
+        read_only_fields = ['id']
+
+
+class ProfileIndustriesUpdateSerializer(serializers.Serializer):
+    industry_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
+class ProfileInterestsUpdateSerializer(serializers.Serializer):
+    interest_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
+class ProfileHobbiesUpdateSerializer(serializers.Serializer):
+    hobby_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
+class TokenWithSubscriptionSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+        # Get cached subscription details from the user's profile (if exists)
+        try:
+            profile = UserProfile.objects.get(user=user)
+            if profile.stripe_subscription_id:
+                data['subscription'] = {
+                    'id': profile.stripe_subscription_id,
+                    'status': profile.subscription_status,
+                    'current_period_end': profile.subscription_current_period_end,
+                    'cancel_at_period_end': profile.cancel_at_period_end,
+                    'card': (
+                        {'brand': profile.card_brand, 'last4': profile.card_last4}
+                        if profile.card_last4 else None
+                    )
+                }
+            else:
+                data['subscription'] = None
+        except UserProfile.DoesNotExist:
+            data['subscription'] = None
+        return data

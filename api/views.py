@@ -1,8 +1,31 @@
-from rest_framework import permissions
+from rest_framework import permissions, status
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView, RetrieveAPIView
 from rest_framework.filters import SearchFilter
-from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent
-from .serializers import CityListSerializer, LanguageSerializer, RelativeSerializer, RelationshipCatalogSerializer, SupportAgentSerializer
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.db.models import F
+from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog
+from .serializers import (
+    CityListSerializer,
+    LanguageSerializer,
+    RelativeSerializer,
+    RelationshipCatalogSerializer,
+    SupportAgentSerializer,
+    IndustryCatalogSerializer,
+    ProfessionalInterestCatalogSerializer,
+    HobbyCatalogSerializer,
+    ProfileIndustriesUpdateSerializer,
+    ProfileInterestsUpdateSerializer,
+    ProfileHobbiesUpdateSerializer,
+    TokenWithSubscriptionSerializer,
+    ClubCatalogSerializer,
+)
+from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+
+class TokenObtainPairWithSubscriptionView(TokenObtainPairView):
+    serializer_class = TokenWithSubscriptionSerializer
 
 
 class CityListView(ListAPIView):
@@ -67,3 +90,124 @@ class SupportAgentDetailView(RetrieveAPIView):
     queryset = SupportAgent.objects.all()
     serializer_class = SupportAgentSerializer
     permission_classes = [permissions.AllowAny]
+
+
+class IndustryCatalogListView(ListAPIView):
+    queryset = IndustryCatalog.objects.filter(active=True).order_by('name')
+    serializer_class = IndustryCatalogSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [SearchFilter]
+    search_fields = ['name']
+    pagination_class = None
+
+    def list(self, request, *args, **kwargs):
+        # Use DRF filtering to respect search params, then return only the names as a plain array
+        queryset = self.filter_queryset(self.get_queryset())
+        names = list(queryset.values_list('name', flat=True))
+        return Response(names)
+
+
+class ProfessionalInterestCatalogListView(ListAPIView):
+    queryset = ProfessionalInterestCatalog.objects.filter(active=True).order_by('name')
+    serializer_class = ProfessionalInterestCatalogSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [SearchFilter]
+    search_fields = ['name']
+    pagination_class = None
+
+
+class HobbyCatalogListView(ListAPIView):
+    queryset = HobbyCatalog.objects.filter(active=True).order_by('name')
+    serializer_class = HobbyCatalogSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [SearchFilter]
+    search_fields = ['name']
+    pagination_class = None
+
+    def list(self, request, *args, **kwargs):
+        # Return only hobby names as a plain array of strings (with search applied)
+        queryset = self.filter_queryset(self.get_queryset())
+        names = list(queryset.values_list('name', flat=True))
+        return Response(names)
+
+
+class ClubCatalogListView(ListAPIView):
+    queryset = ClubCatalog.objects.filter(active=True).order_by('name')
+    serializer_class = ClubCatalogSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [SearchFilter]
+    search_fields = ['name', 'city']
+    pagination_class = None
+
+    def list(self, request, *args, **kwargs):
+        # Return concatenated "name - city" for each active club (with search applied)
+        queryset = self.filter_queryset(self.get_queryset())
+        items = [f"{c.name} - {c.city}" if c.city else c.name for c in queryset]
+        return Response(items)
+
+
+class UpdateProfileIndustriesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request):
+        serializer = ProfileIndustriesUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data.get('industry_ids', [])
+        names = list(IndustryCatalog.objects.filter(id__in=ids, active=True).values_list('name', flat=True))
+
+        # Obtener o crear ProfessionalProfile del usuario
+        profile = UserProfile.objects.get(user=request.user)
+        prof, _ = ProfessionalProfile.objects.get_or_create(user_profile=profile)
+        # Guardar como CSV en el campo existente (compatibilidad mínima)
+        prof.industries = ", ".join(names)
+        prof.save(update_fields=['industries'])
+        return Response({
+            'industries': names,
+            'count': len(names)
+        })
+
+
+class UpdateProfileInterestsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request):
+        serializer = ProfileInterestsUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data.get('interest_ids', [])
+        names = list(ProfessionalInterestCatalog.objects.filter(id__in=ids, active=True).values_list('name', flat=True))
+
+        profile = UserProfile.objects.get(user=request.user)
+        prof, _ = ProfessionalProfile.objects.get_or_create(user_profile=profile)
+        prof.professional_interest = ", ".join(names)
+        prof.save(update_fields=['professional_interest'])
+        return Response({
+            'professional_interest': names,
+            'count': len(names)
+        })
+
+
+class UpdateProfileHobbiesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request):
+        serializer = ProfileHobbiesUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data.get('hobby_ids', [])
+        names = list(HobbyCatalog.objects.filter(id__in=ids, active=True).values_list('name', flat=True))
+
+        profile = UserProfile.objects.get(user=request.user)
+        # Obtener o crear PersonalDetail
+        personal, _ = PersonalDetail.objects.get_or_create(user_profile=profile)
+        personal.hobbies = ", ".join(names)
+        personal.save(update_fields=['hobbies'])
+        return Response({
+            'hobbies': names,
+            'count': len(names)
+        })
+
+
+class HeltChechView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)

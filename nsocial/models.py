@@ -258,7 +258,6 @@ class UserVideo(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='videos')
 
     # El archivo de video en sí.
-    #video_file = models.FileField(upload_to='user_videos/')
     video_link = models.URLField(null=True, blank=True)
 
     # Campos adicionales para dar contexto al video.
@@ -280,10 +279,8 @@ class Author(models.Model):
 
 class Experience(models.Model):
     title = models.CharField(max_length=255, verbose_name="Título de la Experiencia")
-    #author = models.CharField(max_length=255, verbose_name="Autor", null=True, blank=True)
-    #author_pic = models.URLField(null=True, blank=True)
     authors = models.ManyToManyField(Author, related_name='experiences', blank=True)
-    experience_photograph = models.URLField(null=True, blank=True) #models.ImageField(upload_to='experiences/', verbose_name="Fotografía")
+    experience_photograph = models.URLField(null=True, blank=True)
     description = models.TextField(null=True, blank=True, verbose_name="Descripción")
     city = models.CharField(null=True, blank=True, max_length=100, verbose_name="Ciudad")
     price = models.DecimalField(null=True, blank=True, max_digits=10, decimal_places=2, verbose_name="Precio")
@@ -297,3 +294,25 @@ class Experience(models.Model):
         verbose_name = "Experiencia"
         verbose_name_plural = "Experiencias"
         ordering = ['-created_at']
+
+
+
+class UserIntroductionPreference(models.Model):
+    """
+    Relaciona un perfil de usuario con un único tipo del catálogo de introducciones
+    que puede recibir. Se limita a un registro por perfil (OneToOne).
+    """
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='introduction_preference')
+    introduction_type = models.ForeignKey('membership.IntroductionCatalog', on_delete=models.PROTECT, related_name='user_introduction_preferences')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        try:
+            return f"{self.user_profile.user.email} -> {getattr(self.introduction_type, 'name', self.introduction_type_id)}"
+        except Exception:
+            return f"Preference #{self.pk}"
+
+    class Meta:
+        verbose_name = 'User Introduction Preference'
+        verbose_name_plural = 'User Introduction Preferences'

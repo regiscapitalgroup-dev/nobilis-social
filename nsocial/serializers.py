@@ -20,8 +20,6 @@ from nsocial.models import (
 )
 import stripe
 import logging
-from api.models import LanguageCatalog
-import json
 from django.contrib.auth.password_validation import validate_password
 
 logger = logging.getLogger(__name__)
@@ -202,8 +200,6 @@ class AuthorSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'photo_url']
 
 
-
-
 class FullProfileSerializer(UserProfileSerializer):
     personal_detail = PersonalDetailSerializer(required=False)
     professional_profile = ProfessionalProfileSerializer(required=False)
@@ -216,6 +212,7 @@ class FullProfileSerializer(UserProfileSerializer):
 
     subscription = serializers.SerializerMethodField()
     current_subscription = MembershipSubscriptionSerializer(read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
 
     class Meta(UserProfileSerializer.Meta):
         model = UserProfile
@@ -224,7 +221,8 @@ class FullProfileSerializer(UserProfileSerializer):
             'recognition', 'expertise', 'videos', 'subscription', 'current_subscription',
             # Admin-only fields now included in FullProfile
             'guiding_principle', 'postal_address', 'often_in', 'life_partner_name', 'life_partner_lastname',
-            'annual_limits_introduction', 'receive_reports', 'relatives'
+            'annual_limits_introduction', 'receive_reports', 'relatives',
+            'email'
         ]
 
     def get_subscription(self, obj: UserProfile):
@@ -449,3 +447,258 @@ class AdminProfileSerializer(FullProfileSerializer):
             return RelativeSerializer(qs.all().order_by('-created_at'), many=True).data
         except Exception:
             return []
+
+
+class AdminProfileBasicSerializer(serializers.ModelSerializer):
+    """
+    Serializer for admin-profile/basic endpoint. Allows updating a basic subset of
+    UserProfile fields and managing the user's introduction preference.
+
+    - Updatable fields (PUT/PATCH):
+      alias_title, introduction_headline, postal_address, guiding_principle,
+      annual_limits_introduction, receive_reports, languages, first_name, last_name
+    - Read-only: social_media_profiles (list of the user's social media entries)
+                 introduction (current selection with id and name)
+    - Write-only: introductions (accepts a single ID or a one-item list of IDs)
+                  social_media (list of {platform_name, profile_url})
+    """
+    languages = CommaSeparatedArrayField(required=False)
+    social_media_profiles = SocialMediaProfileSerializer(many=True, read_only=True)
+    # New write-only input to manage social media along with other fields in one request
+    social_media = SocialMediaProfileSerializer(many=True, write_only=True, required=False)
+
+    # Read/Write name fields on the related CustomUser
+    first_name = serializers.CharField(source='user.first_name', required=False)
+    last_name = serializers.CharField(source='user.last_name', required=False)
+
+    # Read-only current introduction selection {id, name}
+    introduction = serializers.SerializerMethodField(read_only=True)
+    # Write-only input to set/update the introduction preference
+    introductions = serializers.ListField(
+        child=serializers.IntegerField(), required=False, write_only=True, allow_empty=False
+    )
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'alias_title',
+            'introduction_headline',
+            'postal_address',
+            'guiding_principle',
+            'annual_limits_introduction',
+            'receive_reports',
+            'languages',
+            'first_name',
+            'last_name',
+            'social_media_profiles',
+            'social_media',  # write-only create/replace
+            'introduction',   # read-only current selection
+            'introductions',  # write-only setter
+        ]
+
+    def get_introduction(self, obj):
+        try:
+            pref = getattr(obj, 'introduction_preference', None)
+            if not pref:
+                return None
+            intro = getattr(pref, 'introduction_type', None)
+            return {
+                'id': getattr(intro, 'id', None),
+                'name': getattr(intro, 'name', None)
+            }
+        except Exception:
+            return None
+
+    def update(self, instance, validated_data):
+        # Extract nested user updates (first_name/last_name)
+        user_data = validated_data.pop('user', {}) if isinstance(validated_data, dict) else {}
+        if user_data:
+            user = instance.user
+            if 'first_name' in user_data:
+                user.first_name = user_data['first_name']
+            if 'last_name' in user_data:
+                user.last_name = user_data['last_name']
+            user.save(update_fields=[
+                f for f in ['first_name', 'last_name'] if f in user_data
+            ] or None)
+
+        # Handle introductions preference first
+        intro_ids = validated_data.pop('introductions', None)
+        if intro_ids is not None:
+            # Normalize: accept a single int or a list with one element
+            try:
+                # If someone passes a single integer despite the ListField, normalize here
+                if isinstance(intro_ids, int):
+                    intro_id = intro_ids
+                else:
+                    intro_id = intro_ids[0] if intro_ids else None
+            except Exception:
+                intro_id = None
+
+            if intro_id:
+                # Lazy import to avoid circulars
+                from nsocial.models import UserIntroductionPreference
+                from membership.models import IntroductionCatalog
+                intro_obj = IntroductionCatalog.objects.filter(id=intro_id).first()
+                if intro_obj is None:
+                    raise serializers.ValidationError({'introductions': 'Invalid introduction id.'})
+                UserIntroductionPreference.objects.update_or_create(
+                    user_profile=instance,
+                    defaults={'introduction_type': intro_obj}
+                )
+            else:
+                # If empty list provided, remove preference if exists
+                try:
+                    pref = instance.introduction_preference
+                    pref.delete()
+                except Exception:
+                    pass
+
+        # Handle social media list (replace strategy)
+        social_media_data = validated_data.pop('social_media', None)
+        if social_media_data is not None:
+            # Remove all existing and recreate from provided list
+            instance.social_media_profiles.all().delete()
+            for item in social_media_data:
+                SocialMediaProfile.objects.create(user_profile=instance, **item)
+
+        # Proceed with standard field updates
+        for field in [
+            'alias_title', 'introduction_headline', 'postal_address', 'guiding_principle',
+            'annual_limits_introduction', 'receive_reports', 'languages'
+        ]:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+        instance.save()
+        return instance
+
+
+
+
+class AdminProfileConfidentialSerializer(serializers.ModelSerializer):
+    """
+    Serializer for /api/admin-profile/confidential/ endpoint.
+
+    Accepts PUT/PATCH with the following input fields:
+    - birthday (date -> UserProfile.birthday)
+    - phone_number (str -> UserProfile.phone_number)
+    - contact_methods (list[str]): if contains 'email' => prefered_email=True; if contains 'phone' => prefered_phone=True
+    - address (str -> UserProfile.postal_address)
+    - city_country (str -> UserProfile.city)
+    - cities_of_interest (list[str] -> UserProfile.often_in)
+    - partner (object {name, surname} -> life_partner_name, life_partner_lastname)
+    - relatives (list[object]) -> replaces api.Relative rows for the current user
+    """
+
+    # Mapped fields
+    address = serializers.CharField(source='postal_address', required=False, allow_blank=True, allow_null=True)
+    city_country = serializers.CharField(source='city', required=False, allow_blank=True, allow_null=True)
+    cities_of_interest = CommaSeparatedArrayField(source='often_in', required=False)
+
+    # Write-only helpers
+    contact_methods = serializers.ListField(child=serializers.CharField(), required=False, write_only=True)
+    partner = serializers.DictField(child=serializers.CharField(allow_blank=True, allow_null=True), required=False, write_only=True)
+    relatives = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            'birthday',
+            'phone_number',
+            'address',
+            'city_country',
+            'cities_of_interest',
+            'contact_methods',
+            'partner',
+            'relatives',
+        ]
+
+    def update(self, instance, validated_data):
+        # Extract write-only sections first
+        contact_methods = validated_data.pop('contact_methods', None)
+        partner = validated_data.pop('partner', None)
+        relatives_payload = validated_data.pop('relatives', None)
+
+        # Standard mapped fields (postal_address, city, often_in) + simple ones
+        for field in ['birthday', 'phone_number', 'postal_address', 'city', 'often_in']:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+
+        # Apply contact method preferences only if provided
+        if contact_methods is not None:
+            methods = [str(x).strip().lower() for x in (contact_methods or [])]
+            instance.prefered_email = 'email' in methods
+            instance.prefered_phone = 'phone' in methods
+
+        # Partner mapping
+        if isinstance(partner, dict):
+            name = partner.get('name')
+            surname = partner.get('surname')
+            if name is not None:
+                instance.life_partner_name = name
+            if surname is not None:
+                instance.life_partner_lastname = surname
+
+        instance.save()
+
+        # Relatives replacement (if provided)
+        if relatives_payload is not None:
+            try:
+                from api.models import Relative, RelationshipCatalog
+                user = self.context.get('request').user if self.context and self.context.get('request') else None
+                if user is None or not getattr(user, 'is_authenticated', False):
+                    raise serializers.ValidationError({'relatives': 'Authentication required.'})
+
+                # Remove all existing relatives for this user
+                Relative.objects.filter(user=user).delete()
+
+                for item in relatives_payload or []:
+                    if not isinstance(item, dict):
+                        continue
+                    first_name = item.get('first_name')
+                    if not first_name:
+                        # Skip invalid entries silently (minimal behavior); could also raise error
+                        continue
+                    last_name = item.get('last_name', '') or ''
+                    year_of_birth = item.get('year_of_birth')
+
+                    rel_obj = None
+                    rel_id = item.get('relationship_id')
+                    if rel_id is not None:
+                        rel_obj = RelationshipCatalog.objects.filter(id=rel_id).first()
+                    if rel_obj is None:
+                        # Optional: attempt by name
+                        rel_name = item.get('relationship') or item.get('relationship_name')
+                        if rel_name:
+                            rel_obj = RelationshipCatalog.objects.filter(name=str(rel_name)).first()
+                    if rel_obj is None:
+                        # If relationship is missing or invalid, skip this relative
+                        continue
+
+                    Relative.objects.create(
+                        user=user,
+                        first_name=first_name,
+                        last_name=last_name,
+                        year_of_birth=year_of_birth,
+                        relationship=rel_obj,
+                    )
+            except Exception:
+                # Fail silently for relatives block to keep minimal surface; could log
+                pass
+
+        return instance
+
+
+class AdminProfileBiographySerializer(serializers.Serializer):
+    biography = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    urls = serializers.ListField(child=serializers.URLField(), required=False)
+
+    def validate_urls(self, value):
+        # Remove duplicates while preserving order
+        seen = set()
+        unique = []
+        for url in value or []:
+            if url not in seen:
+                seen.add(url)
+                unique.append(url)
+        return unique
