@@ -250,6 +250,7 @@ class Expertise(models.Model):
     user_profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='expertise')
     title = models.CharField(max_length=100)
     content = models.TextField()
+    pricing = models.DecimalField(null=True, blank=True, max_digits=10, decimal_places=2, default=0)
     rate = models.CharField(max_length=50)
 
 

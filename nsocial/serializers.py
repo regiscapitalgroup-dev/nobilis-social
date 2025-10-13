@@ -152,7 +152,7 @@ class NonProfitInvolvementSerializer(serializers.ModelSerializer):
 class ExpertiseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expertise
-        fields = ['title', 'content', 'rate']
+        fields = ['title', 'content', 'pricing', 'rate']
 
 
 # --- Serializadores para los modelos "intermedios" (objetos) ---

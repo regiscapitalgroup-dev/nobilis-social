@@ -17,10 +17,12 @@ from nsocial.views import (
     RoleListCreateView,
     RoleDetailView,
     ProfilePictureUpdateView,
-    AdminProfileBiographyView
-)
+    AdminProfileBiographyView,
+    RecognitionUpdateView,
+    ExpertiseUpdateView
+ )
 from membership.views import AccountOverviewView
-from api.views import CityListView, LanguageListView, RelativeListCreateView, RelativeDetailView, RelationshipCatalogListView, SupportAgentListView, SupportAgentDetailView, IndustryCatalogListView, ProfessionalInterestCatalogListView, HobbyCatalogListView, UpdateProfileIndustriesView, UpdateProfileInterestsView, UpdateProfileHobbiesView, TokenObtainPairWithSubscriptionView, ClubCatalogListView
+from api.views import CityListView, LanguageListView, RelativeListCreateView, RelativeDetailView, RelationshipCatalogListView, SupportAgentListView, SupportAgentDetailView, IndustryCatalogListView, ProfessionalInterestCatalogListView, HobbyCatalogListView, UpdateProfileIndustriesView, UpdateProfileInterestsView, UpdateProfileHobbiesView, TokenObtainPairWithSubscriptionView, ClubCatalogListView, RateExpertiseView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -51,6 +53,8 @@ urlpatterns = [
     path('social-profiles/<int:pk>/', SocialMediaProfileRetrieveUpdateDestroyView.as_view(), name='social-profile-detail'),
     path('profile/videos/', UserVideoListCreateView.as_view(), name='video-list-create'),
     path('profile/picture/', ProfilePictureUpdateView.as_view(), name='profile-picture'),
+    path('profile/recognition/', RecognitionUpdateView.as_view(), name='profile-recognition'),
+    path('profile/expertise/', ExpertiseUpdateView.as_view(), name='profile-expertise'),
     path('experiences/', ExperienceListView.as_view(), name='experience-list'),
 
     # Relationship catalog endpoint (searchable)
@@ -69,6 +73,7 @@ urlpatterns = [
     path('catalog/professional-interests/', ProfessionalInterestCatalogListView.as_view(), name='professional-interest-catalog-list'),
     path('catalog/hobbies/', HobbyCatalogListView.as_view(), name='hobby-catalog-list'),
     path('catalog/clubs/', ClubCatalogListView.as_view(), name='club-catalog-list'),
+    path('catalog/rate-expertise/', RateExpertiseView.as_view(), name='rate-expertise'),
 
     # Endpoints to update current user's profile selections
     path('profile/industries/', UpdateProfileIndustriesView.as_view(), name='update-profile-industries'),

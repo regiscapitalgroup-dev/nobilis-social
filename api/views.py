@@ -4,7 +4,7 @@ from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import F
-from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog
+from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog, RateExpertise
 from .serializers import (
     CityListSerializer,
     LanguageSerializer,
@@ -211,3 +211,16 @@ class HeltChechView(APIView):
 
     def get(self, request):
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
+class RateExpertiseView(APIView):
+    """GET-only endpoint that returns the available expertise rate types from the model."""
+    permission_classes = [permissions.AllowAny]
+    http_method_names = ['get']
+
+    def get(self, request):
+        # Read from the model; if empty, provide sensible defaults without enforcing auth.
+        names = list(RateExpertise.objects.filter(active=True).order_by('name').values_list('name', flat=True))
+        if not names:
+            names = ["hour", "project"]
+        return Response(names)

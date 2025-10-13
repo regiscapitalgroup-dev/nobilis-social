@@ -136,3 +136,17 @@ class ClubCatalog(models.Model):
         verbose_name = 'Club'
         verbose_name_plural = 'Clubs'
         ordering = ['name']
+
+
+class RateExpertise(models.Model):
+    """Catalog for expertise rate types (e.g., hour, project)."""
+    name = models.CharField(max_length=50, unique=True)
+    active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = 'Rate Expertise'
+        verbose_name_plural = 'Rate Expertise'
+        ordering = ['name']

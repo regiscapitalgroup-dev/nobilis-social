@@ -5,7 +5,7 @@ class WaitingList(models.Model):
     # screen 1
     first_name = models.CharField(max_length=100, null=False, blank=False, verbose_name="Name")
     last_name = models.CharField(max_length=150, null=False, blank=False, verbose_name="Last Name")
-    phone_number = models.CharField(max_length=20, null=False, blank=False, verbose_name="Phone Number")
+    phone_number = models.CharField(max_length=20, null=True, blank=True, verbose_name="Phone Number")
     #phone_number = EncryptedCharField(null=False, blank=False, verbose_name="Phone Number")
     email = models.EmailField(max_length=255, null=False, blank=False, verbose_name="E-mail") 
     occupation = models.CharField(max_length=60, null=True, blank=True, verbose_name="Occupation")

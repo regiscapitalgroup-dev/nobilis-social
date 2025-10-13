@@ -13,7 +13,7 @@ from .serializers import (
     AdminProfileConfidentialSerializer,
     AdminProfileBiographySerializer,
 )
-from .models import CustomUser, UserProfile, SocialMediaProfile, Experience, Role
+from .models import CustomUser, UserProfile, SocialMediaProfile, Experience, Role, Recognition, Expertise
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
@@ -415,6 +415,151 @@ class AdminProfileBiographyView(APIView):
             'biography': profile.biography,
             'urls': current_urls,
         }, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request)
+
+
+
+class RecognitionUpdateView(APIView):
+    """
+    Updates current user's Recognition via PUT/PATCH.
+    Expected payload:
+    {
+      "recognition": [
+        {"desc": "...", "url": "..."},
+        ...
+      ],
+      "additional_links": ["https://...", ...]
+    }
+    - Saves `recognition` array as-is into Recognition.top_accomplishments
+    - Saves `additional_links` into Recognition.additional_links
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _update(self, request):
+        data = request.data or {}
+        # Basic validation and normalization
+        recog_list = data.get('recognition', None)
+        links_list = data.get('additional_links', None)
+
+        if recog_list is not None and not isinstance(recog_list, list):
+            return Response({'detail': 'recognition must be an array'}, status=status.HTTP_400_BAD_REQUEST)
+        if links_list is not None and not isinstance(links_list, list):
+            return Response({'detail': 'additional_links must be an array'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Optionally validate items shape
+        if isinstance(recog_list, list):
+            cleaned = []
+            for item in recog_list:
+                if not isinstance(item, dict):
+                    continue
+                desc = item.get('desc')
+                url = item.get('url')
+                # keep only keys of interest
+                cleaned.append({'desc': desc, 'url': url})
+            recog_list = cleaned
+
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        recognition_obj, _ = Recognition.objects.get_or_create(user_profile=profile)
+
+        updates = {}
+        if recog_list is not None:
+            recognition_obj.top_accomplishments = recog_list
+            updates['top_accomplishments'] = recog_list
+        if links_list is not None:
+            recognition_obj.additional_links = links_list
+            updates['additional_links'] = links_list
+
+        if updates:
+            # Save only if something provided
+            recognition_obj.save()
+
+        return Response({
+            'top_accomplishments': recognition_obj.top_accomplishments,
+            'additional_links': recognition_obj.additional_links,
+        }, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        return self._update(request)
+
+    def patch(self, request):
+        return self._update(request)
+
+
+
+class ExpertiseUpdateView(APIView):
+    """
+    Updates current user's Expertise via PUT/PATCH.
+    Expected payload:
+    {
+      "expertise": [
+        {"title": "...", "content": "...", "pricing": "200", "rate": "hr"},
+        ...
+      ]
+    }
+    - Replaces the user's expertise list with the provided items.
+    - Associates all items to the current session user's UserProfile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _update(self, request):
+        from decimal import Decimal, InvalidOperation
+
+        payload = request.data or {}
+        items = payload.get('expertise', None)
+
+        if items is None:
+            return Response({'detail': 'expertise is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(items, list):
+            return Response({'detail': 'expertise must be an array'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure user profile exists
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        # Replace existing expertise entries
+        profile.expertise.all().delete()
+
+        saved = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            title = item.get('title')
+            content = item.get('content')
+            pricing_val = item.get('pricing', None)
+            rate = item.get('rate')
+
+            # If no fields provided, skip
+            if title is None and content is None and pricing_val is None and rate is None:
+                continue
+
+            # Coerce pricing to Decimal or None
+            pricing = None
+            if pricing_val not in (None, ""):
+                try:
+                    pricing = Decimal(str(pricing_val))
+                except (InvalidOperation, ValueError, TypeError):
+                    pricing = None
+
+            obj = Expertise.objects.create(
+                user_profile=profile,
+                title=title or "",
+                content=content or "",
+                pricing=pricing,
+                rate=str(rate or "")
+            )
+            saved.append({
+                'id': obj.id,
+                'title': obj.title,
+                'content': obj.content,
+                'pricing': str(obj.pricing) if obj.pricing is not None else None,
+                'rate': obj.rate,
+            })
+
+        return Response({'expertise': saved}, status=status.HTTP_200_OK)
 
     def put(self, request):
         return self._update(request)
