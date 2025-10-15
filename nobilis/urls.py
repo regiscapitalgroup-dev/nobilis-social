@@ -9,6 +9,7 @@ urlpatterns = [
     path('api/v1/', include('api.urls')),
     path('api/v1/members/', include('membership.urls')),
     path('api/v1/waitinglist/', include('waitinglist.urls')),
+    path('api/v1/moderation/', include('moderation.urls')),
     path('', HeltChechView.as_view()),
 ]
 

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from nsocial.models import UserProfile
+from nsocial.models import UserProfile, CustomUser, Role
 
 
 class CityListSerializer(serializers.BaseSerializer):
@@ -116,3 +116,31 @@ class TokenWithSubscriptionSerializer(TokenObtainPairSerializer):
         except UserProfile.DoesNotExist:
             data['subscription'] = None
         return data
+
+
+class InviteUserSerializer(serializers.Serializer):
+    """
+    Serializer para validar los datos al invitar a un nuevo usuario.
+    """
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=30)
+    last_name = serializers.CharField(max_length=30)
+
+    role_code = serializers.SlugRelatedField(
+        queryset=Role.objects.all(),
+        slug_field='code',  # Campo en el modelo Role usado para la búsqueda.
+        source='role',  # La clave en `validated_data` será 'role'.
+        required=True,
+        help_text="Código del rol a asignar (ej. 'moderator')."
+    )
+
+    organization = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    relation = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+    def validate_email(self, value):
+        """
+        Comprueba que no exista ya un usuario con el mismo correo electrónico.
+        """
+        if CustomUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Un usuario con este correo electrónico ya existe.")
+        return value

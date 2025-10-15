@@ -1,10 +1,20 @@
-from rest_framework import permissions, status
+from rest_framework import permissions, status, generics
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView, RetrieveAPIView
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import F
-from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog, RateExpertise
+from .models import (
+    CityCatalog,
+    LanguageCatalog,
+    Relative,
+    RelationshipCatalog,
+    SupportAgent,
+    IndustryCatalog,
+    ProfessionalInterestCatalog,
+    HobbyCatalog,
+    ClubCatalog,
+    RateExpertise
+)
 from .serializers import (
     CityListSerializer,
     LanguageSerializer,
@@ -19,9 +29,16 @@ from .serializers import (
     ProfileHobbiesUpdateSerializer,
     TokenWithSubscriptionSerializer,
     ClubCatalogSerializer,
+    InviteUserSerializer
 )
-from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail
+from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail, Role, CustomUser
+from moderation.models import (
+    TeamMembership, Team, ModeratorInvitation, ModeratorProfile
+)
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.db import transaction
+from django.conf import settings
+from django.core.mail import send_mail
 
 
 class TokenObtainPairWithSubscriptionView(TokenObtainPairView):
@@ -224,3 +241,83 @@ class RateExpertiseView(APIView):
         if not names:
             names = ["hour", "project"]
         return Response(names)
+
+
+class InviteUserView(generics.GenericAPIView):
+    serializer_class = InviteUserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        # Solo los administradores pueden invitar a otros moderadores
+        if not getattr(request.user, 'is_admin', False):
+            return Response({'error': 'No tienes permiso para realizar esta acción.'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        validated_data = serializer.validated_data
+        email = validated_data['email']
+        first_name = validated_data['first_name']
+        last_name = validated_data['last_name']
+
+        organization = validated_data.get('organization')
+        relation = validated_data.get('relation')
+
+        # Creamos al usuario colaborador
+        assigned_role = serializer.validated_data['role']
+
+        user = CustomUser.objects.create_user(
+            email=email,
+            password=None,  # Sin contraseña inicial
+            first_name=first_name,
+            last_name=last_name,
+            is_active=False,  # Inactivo hasta que acepte
+            invited_by=request.user,
+            role=assigned_role
+        )
+        ModeratorProfile.objects.create(
+            user=user,
+            organization=organization,
+            relation=relation
+        )
+        # Creación del equipo automático
+        admin_user = request.user
+        team_name = f"Team of {admin_user.first_name} {admin_user.last_name}".strip()
+        team, _ = Team.objects.get_or_create(
+            name=team_name,
+            defaults={'description': f'Self-generated team for {admin_user.email}.'}
+        )
+        TeamMembership.objects.create(user=user, team=team, role=assigned_role)
+
+        # --- LÓGICA CORREGIDA: Usamos el nuevo token ---
+        invitation = ModeratorInvitation.objects.create(
+            email=email,
+            invited_by=request.user
+        )
+
+        # Generamos un enlace de activación específico para moderadores
+        # IMPORTANTE: El frontend necesitará una ruta como /activate-moderator/<token>
+        activation_url = f"https://main.d1rykkcgalxqn2.amplifyapp.com/activate-moderator/{invitation.token}/"
+        subject = "Nobilis Invitation"
+        message = f"""
+                            You're invited to being my team
+
+                            {activation_url}
+                            
+                            This is a development email sample, please don't reply
+                        """
+        from_email = settings.EMAIL_HOST_USER
+
+        send_mail(subject=subject,
+                  message=message,
+                  from_email=from_email,
+                  recipient_list=[email],
+                  fail_silently=False,
+                  )
+
+        return Response({
+            'success': 'Ok',
+            'activation_url': activation_url  # Devolvemos la URL para facilitar las pruebas
+        }, status=status.HTTP_201_CREATED)
+

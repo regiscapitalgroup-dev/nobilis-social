@@ -22,7 +22,25 @@ from nsocial.views import (
     ExpertiseUpdateView
  )
 from membership.views import AccountOverviewView
-from api.views import CityListView, LanguageListView, RelativeListCreateView, RelativeDetailView, RelationshipCatalogListView, SupportAgentListView, SupportAgentDetailView, IndustryCatalogListView, ProfessionalInterestCatalogListView, HobbyCatalogListView, UpdateProfileIndustriesView, UpdateProfileInterestsView, UpdateProfileHobbiesView, TokenObtainPairWithSubscriptionView, ClubCatalogListView, RateExpertiseView
+from api.views import (
+    CityListView,
+    LanguageListView,
+    RelativeListCreateView,
+    RelativeDetailView,
+    RelationshipCatalogListView,
+    SupportAgentListView,
+    SupportAgentDetailView,
+    IndustryCatalogListView,
+    ProfessionalInterestCatalogListView,
+    HobbyCatalogListView,
+    UpdateProfileIndustriesView,
+    UpdateProfileInterestsView,
+    UpdateProfileHobbiesView,
+    TokenObtainPairWithSubscriptionView,
+    ClubCatalogListView,
+    RateExpertiseView,
+    InviteUserView
+)
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -31,6 +49,7 @@ from rest_framework_simplejwt.views import (
 
 urlpatterns = [
     path('users/current/', AccountOverviewView.as_view()),
+    path('my-team-invite/', InviteUserView.as_view(), name='invite-user'),
 
     path('change-password/<int:pk>/', ChangePasswordView.as_view()),
     path('password-reset/', ForgotMyPassword.as_view(), name='password_reset'),
