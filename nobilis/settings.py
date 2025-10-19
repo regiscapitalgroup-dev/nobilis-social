@@ -66,6 +66,8 @@ INSTALLED_APPS = [
     'membership',
     'notification',
     'storages',
+    'moderation',
+    'experiences'
 ]
 
 MIDDLEWARE = [
@@ -263,6 +265,7 @@ CORS_ALLOW_HEADERS = (
 
 APPEND_SLASH=False
 
+#EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
 EMAIL_HOST = config("EMAIL_HOST", cast=str, default=None)

@@ -74,7 +74,7 @@ urlpatterns = [
     path('profile/picture/', ProfilePictureUpdateView.as_view(), name='profile-picture'),
     path('profile/recognition/', RecognitionUpdateView.as_view(), name='profile-recognition'),
     path('profile/expertise/', ExpertiseUpdateView.as_view(), name='profile-expertise'),
-    path('experiences/', ExperienceListView.as_view(), name='experience-list'),
+    path('experiences1/', ExperienceListView.as_view(), name='experience-list'),
 
     # Relationship catalog endpoint (searchable)
     path('relatives/relationships/', RelationshipCatalogListView.as_view(), name='relationship-catalog-list'),

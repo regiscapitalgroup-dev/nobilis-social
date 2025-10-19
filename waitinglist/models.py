@@ -29,6 +29,8 @@ class WaitingList(models.Model):
     executive = models.BooleanField(blank=True, default=False, verbose_name="Executive")
     governor = models.BooleanField(blank=True, default=False, verbose_name="Governor")
     link_verify = models.CharField(max_length=255, null=True, blank=True, verbose_name="Link")
+    # screen 4
+    income_range = models.CharField(max_length=50, null=True, blank=True, verbose_name="Income Range")
     # status 
     created_at = models.DateField(auto_now_add=True, verbose_name="Created at")
     status_waiting_list = models.IntegerField(default=0, verbose_name="Status Waiting List")
