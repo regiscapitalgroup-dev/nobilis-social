@@ -20,6 +20,9 @@ from django.db import models
 from django.db.models import Min
 from django.contrib.auth import get_user_model
 from decimal import Decimal
+from notification.models import Notification
+from django.db.models import Q
+from django.contrib.contenttypes.models import ContentType
 
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -1050,15 +1053,60 @@ class MemberIntroductionListCreateView(generics.ListCreateAPIView):
         intro_type = serializer.validated_data.get('introduction_type')
 
         # Process payment before creating the record
-        payment_result = self._process_introduction_payment(request.user, intro_type)
-        if not payment_result.get('success'):
-            return Response(payment_result.get('error'), status=payment_result.get('status', status.HTTP_400_BAD_REQUEST))
+        #payment_result = self._process_introduction_payment(request.user, intro_type)
+        #if not payment_result.get('success'):
+        #    return Response(payment_result.get('error'), status=payment_result.get('status', status.HTTP_400_BAD_REQUEST))
 
         # Payment succeeded or not required; proceed to create
         instance = serializer.save(from_user=request.user)
         output = self.get_serializer(instance)
         headers = self.get_success_headers(output.data)
+
+        introduction_content_type = ContentType.objects.get_for_model(intro_type)
+
+        Notification.objects.create(
+            actor=instance.from_user,
+            recipient=instance.to_user,
+            verb='te ha solicitado una introducción',
+            target_content_type=introduction_content_type,  # <-- Nombre correcto
+            target_object_id=instance.pk  # <-- Nombre correcto
+        )
+
         return Response(output.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class MemberIntroductionRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView): #
+    queryset = MemberIntroduction.objects.all()
+    serializer_class = MemberIntroductionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return MemberIntroduction.objects.filter(Q(from_user=user) | Q(to_user=user)) #
+
+    def perform_update(self, serializer): #
+        instance = serializer.save() #
+        new_status = instance.status
+
+        # Solo notificamos si el usuario actual es el destinatario
+        if instance.to_user == self.request.user: #
+            verb = ''
+            if new_status == 'accepted':
+                verb = 'ha aceptado tu solicitud de introducción'
+            elif new_status == 'rejected':
+                verb = 'ha rechazado tu solicitud de introducción'
+
+            # --- CREA la notificación para el solicitante original ---
+            if verb:
+                introduction_content_type = ContentType.objects.get_for_model(instance)
+                Notification.objects.create(
+                    actor=instance.to_user,
+                    recipient=instance.from_user,
+                    verb=verb,
+                    target_content_type=introduction_content_type,  # <-- Nombre correcto
+                    target_object_id=instance.pk  # <-- Nombre correcto
+                ) #
+            # ------------------------------------------------------
 
 
 class MemberIntroductionDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -1120,3 +1168,64 @@ class MemberReferralDetailView(generics.RetrieveUpdateDestroyAPIView):
         if getattr(user, 'is_admin', False):
             return qs
         return qs.filter(created_by=user)
+
+
+class MemberIntroductionRequestView(generics.CreateAPIView):
+    serializer_class = MemberIntroductionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        # El 'from_user' es el usuario que está haciendo la petición
+        introduction = serializer.save(from_user=self.request.user)
+
+        # --- 2. CREA la notificación para el destinatario ---
+        # Al guardar, se activa 'notify_ws_on_create' automáticamente
+        Notification.objects.create(
+            actor=introduction.from_user,  # Quién solicita
+            recipient=introduction.to_user,  # Quién recibe la solicitud
+            verb='te ha solicitado una introducción',  # El mensaje
+            action_object=introduction  # El objeto relacionado (la introducción misma)
+        )
+        # ---------------------------------------------------
+
+
+class MemberIntroductionResponseView(generics.UpdateAPIView):
+    queryset = MemberIntroduction.objects.all()
+    serializer_class = MemberIntroductionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def update(self, request, *args, **kwargs):
+        introduction = self.get_object()
+
+        # Se asegura de que solo el destinatario pueda responder
+        if introduction.to_user != request.user:
+            return Response({'error': 'No tienes permiso para responder a esta solicitud.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        new_status = request.data.get('status')
+
+        if new_status not in ['accepted', 'rejected']:
+            return Response({'error': 'El estado proporcionado no es válido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        introduction.status = new_status
+        introduction.save()
+
+        verb = ''
+        if new_status == 'accepted':
+            verb = 'ha aceptado tu solicitud de introducción'
+        elif new_status == 'rejected':
+            verb = 'ha rechazado tu solicitud de introducción'
+
+        # --- 3. ENVIAR NOTIFICACIÓN DE RESPUESTA ---
+        if verb:
+            Notification.objects.create(
+                actor=introduction.to_user,  # Quién responde (el destinatario original)
+                recipient=introduction.from_user,  # Quién recibe la notificación (el solicitante original)
+                verb=verb,  # El mensaje (aceptado/rechazado)
+                action_object=introduction
+            )
+        # -------------------------------------------
+
+        serializer = self.get_serializer(introduction)
+        return Response(serializer.data)
+

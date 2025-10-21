@@ -1,12 +1,13 @@
 from django.urls import path
 from membership.views import (ListAvailablePlansView, CreateSubscriptionView, 
                               StripeWebhookView, CancelSubscriptionView, 
-                              SubscriptionStatusView, PlanNobilis, AccountOverviewView, PlanPricesView, ShippingAddressView, MembersSubscriptionsOverviewView, MembersListView, InvitationListCreateView, DependentsListView,
+                              SubscriptionStatusView, PlanNobilis, AccountOverviewView, PlanPricesView, ShippingAddressView,
+                              MembersSubscriptionsOverviewView, MembersListView, InvitationListCreateView, DependentsListView,
                               IntroductionCatalogListCreateView, IntroductionCatalogDetailView,
                               IntroductionStatusListCreateView, IntroductionStatusDetailView,
                               MemberIntroductionListCreateView, MemberIntroductionDetailView,
                               InviteeQualificationCatalogListCreateView, InviteeQualificationCatalogDetailView,
-                              MemberReferralListCreateView, MemberReferralDetailView)
+                              MemberReferralListCreateView, MemberReferralDetailView, MemberIntroductionRetrieveUpdateDestroyView)
 
 urlpatterns = [
     path('stripe/plans/', ListAvailablePlansView.as_view(), name='price-list'),
@@ -37,7 +38,7 @@ urlpatterns = [
 
     # Member Referral catalog endpoints
     path('referrals/catalog/', InviteeQualificationCatalogListCreateView.as_view(), name='invitee-qualification-catalog-list-create'),
-    path('referrals/catalog/<int:pk>/', InviteeQualificationCatalogDetailView.as_view(), name='invitee-qualification-catalog-detail'),
+    path('referrals/catalog/<int:pk>/', MemberIntroductionRetrieveUpdateDestroyView.as_view(), name='invitee-qualification-catalog-detail'),
 
     # Member Referral endpoints
     path('referrals/', MemberReferralListCreateView.as_view(), name='member-referral-list-create'),
