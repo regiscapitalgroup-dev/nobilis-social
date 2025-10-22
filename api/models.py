@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 
 class InviteTmpToken(models.Model):
@@ -150,3 +151,30 @@ class RateExpertise(models.Model):
         verbose_name = 'Rate Expertise'
         verbose_name_plural = 'Rate Expertise'
         ordering = ['name']
+
+
+class ContactMessage(models.Model):
+    full_name = models.CharField(max_length=100, verbose_name='Nombre Completo')
+    email = models.EmailField(verbose_name='Correo Electrónico')
+    message = models.TextField(verbose_name='Mensaje')
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='Fecha de Envío')
+    is_read = models.BooleanField(default=False, verbose_name='Leído')
+
+    def __str__(self):
+        return f"Mensaje de {self.full_name} ({self.email})"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Mensaje de Contacto'
+        verbose_name_plural = 'Mensajes de Contacto'
+
+
+class ContactEmail(models.Model):
+    email = models.EmailField(unique=True, verbose_name='Correo de Contacto')
+
+    def __str__(self):
+        return self.email
+
+    class Meta:
+        verbose_name = 'Correo de Contacto'
+        verbose_name_plural = 'Correos de Contacto'

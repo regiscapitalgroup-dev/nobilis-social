@@ -1,9 +1,10 @@
 from waitinglist.models import WaitingList
-from nsocial.models import UserProfile
+from nsocial.models import CustomUser
 from waitinglist.serializers import WaitingListSerializer, ExistingUserSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from api.paginations import CustomPagination
+from notification.models import Notification
 from rest_framework.permissions import AllowAny
 import uuid
 from rest_framework import status, generics
@@ -13,32 +14,62 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from api.models import InviteTmpToken
 from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.contenttypes.models import ContentType
 
-
-class WaitingListView(APIView):
+# class WaitingListView(APIView):
+#     pagination_class = CustomPagination
+#     serializer_class = WaitingListSerializer
+#     permission_classes = [AllowAny]
+#
+#     def get(self, request, format=None):
+#         waitinglist = WaitingList.objects.all().filter(status_waiting_list=0)
+#         serializer = WaitingListSerializer(waitinglist, many=True)
+#         return Response(serializer.data)
+#
+#     def post(self, request):
+#         serializer = WaitingListSerializer(data=request.data)
+#         if serializer.is_valid():
+#             user = get_user_model()
+#             new_user = user.objects.create(email=serializer.validated_data["email"],
+#                                         first_name=serializer.validated_data["first_name"],
+#                                         last_name=serializer.validated_data["last_name"],
+#                                         is_active=False)
+#             new_user.set_password('secret')
+#             serializer.save()
+#
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class WaitingListView(generics.ListCreateAPIView):
     pagination_class = CustomPagination
+    queryset = WaitingList.objects.all()
     serializer_class = WaitingListSerializer
     permission_classes = [AllowAny]
 
-    def get(self, request, format=None):
-        waitinglist = WaitingList.objects.all().filter(status_waiting_list=0)
-        serializer = WaitingListSerializer(waitinglist, many=True)
-        return Response(serializer.data)
-    
-    def post(self, request):
-        serializer = WaitingListSerializer(data=request.data)
-        if serializer.is_valid():
-            user = get_user_model()
-            new_user = user.objects.create(email=serializer.validated_data["email"], 
-                                        first_name=serializer.validated_data["first_name"], 
-                                        last_name=serializer.validated_data["last_name"],
-                                        is_active=False)
-            new_user.set_password('secret')
-            serializer.save()
+    def perform_create(self, serializer):
+        instance = serializer.save()
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
-    
+        try:
+            admin_users = list(CustomUser.objects.filter(role__is_admin=True))
+
+            if not admin_users:
+                print("Advertencia: No se encontraron usuarios administradores para notificar.")
+                return
+
+            waitinglist_content_type = ContentType.objects.get_for_model(instance)
+
+            for admin in admin_users:
+                Notification.objects.create(
+                    recipient=admin,
+                    actor=None,
+                    verb=f"{instance.first_name} {instance.last_name} se ha unido a la lista de espera", #
+                    target_content_type=waitinglist_content_type, #
+                    target_object_id=instance.pk #
+                )
+            print(f"Notificaciones enviadas a {len(admin_users)} administradores.")
+
+        except Exception as e:
+            print(f"Error al intentar crear notificaciones para WaitingList: {e}")
+
 
 class WaitingListDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = WaitingList.objects.all()

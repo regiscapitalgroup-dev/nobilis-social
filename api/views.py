@@ -13,7 +13,9 @@ from .models import (
     ProfessionalInterestCatalog,
     HobbyCatalog,
     ClubCatalog,
-    RateExpertise
+    RateExpertise,
+    ContactMessage,
+    ContactEmail
 )
 from .serializers import (
     CityListSerializer,
@@ -29,7 +31,9 @@ from .serializers import (
     ProfileHobbiesUpdateSerializer,
     TokenWithSubscriptionSerializer,
     ClubCatalogSerializer,
-    InviteUserSerializer
+    InviteUserSerializer,
+    ContactMessageSerializer,
+    ContactEmailSerializer
 )
 from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail, Role, CustomUser
 from moderation.models import (
@@ -39,7 +43,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from django.db import transaction
 from django.conf import settings
 from django.core.mail import send_mail
-
+from moderation.views import IsAdminRole
 
 class TokenObtainPairWithSubscriptionView(TokenObtainPairView):
     serializer_class = TokenWithSubscriptionSerializer
@@ -318,6 +322,31 @@ class InviteUserView(generics.GenericAPIView):
 
         return Response({
             'success': 'Ok',
-            'activation_url': activation_url  # Devolvemos la URL para facilitar las pruebas
+            'activation_url': activation_url
         }, status=status.HTTP_201_CREATED)
 
+
+class ContactMessageListCreateView(generics.ListCreateAPIView):
+    queryset = ContactMessage.objects.all()
+    serializer_class = ContactMessageSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAdminRole()]
+        return [permissions.AllowAny()]
+
+
+class ContactEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        contact_email_obj = ContactEmail.objects.first()
+
+        if contact_email_obj:
+            serializer = ContactEmailSerializer(contact_email_obj)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"error": "No se ha configurado un correo de contacto."},
+                status=status.HTTP_404_NOT_FOUND
+            )

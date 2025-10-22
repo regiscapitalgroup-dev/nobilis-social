@@ -1,5 +1,16 @@
 from rest_framework import serializers
-from .models import CityCatalog, LanguageCatalog, Relative, RelationshipCatalog, SupportAgent, IndustryCatalog, ProfessionalInterestCatalog, HobbyCatalog, ClubCatalog
+from .models import (
+    ContactMessage,
+    LanguageCatalog,
+    Relative,
+    RelationshipCatalog,
+    SupportAgent,
+    IndustryCatalog,
+    ProfessionalInterestCatalog,
+    HobbyCatalog,
+    ClubCatalog,
+    ContactEmail
+)
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from nsocial.models import UserProfile, CustomUser, Role
 
@@ -144,3 +155,16 @@ class InviteUserSerializer(serializers.Serializer):
         if CustomUser.objects.filter(email=value).exists():
             raise serializers.ValidationError("Un usuario con este correo electrónico ya existe.")
         return value
+
+
+class ContactMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactMessage
+        fields = ['id', 'full_name', 'email', 'message', 'created_at', 'is_read']
+        read_only_fields = ['id', 'created_at', 'is_read'] # Solo lectura para GET
+
+
+class ContactEmailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactEmail
+        fields = ['email']

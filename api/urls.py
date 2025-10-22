@@ -11,7 +11,6 @@ from nsocial.views import (
     AdminProfileView,
     AdminProfileBasicView,
     AdminProfileConfidentialView,
-    UserVideoDestroyView,
     UserVideoListCreateView,
     ExperienceListView,
     RoleListCreateView,
@@ -39,10 +38,11 @@ from api.views import (
     TokenObtainPairWithSubscriptionView,
     ClubCatalogListView,
     RateExpertiseView,
-    InviteUserView
+    InviteUserView,
+    ContactMessageListCreateView,
+    ContactEmailView
 )
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
 )
 
@@ -94,13 +94,13 @@ urlpatterns = [
     path('catalog/clubs/', ClubCatalogListView.as_view(), name='club-catalog-list'),
     path('catalog/rate-expertise/', RateExpertiseView.as_view(), name='rate-expertise'),
 
-    # Endpoints to update current user's profile selections
     path('profile/industries/', UpdateProfileIndustriesView.as_view(), name='update-profile-industries'),
     path('profile/professional-interests/', UpdateProfileInterestsView.as_view(), name='update-profile-interests'),
     path('profile/hobbies/', UpdateProfileHobbiesView.as_view(), name='update-profile-hobbies'),
 
-    # Notifications REST endpoints
     path('notifications/', include('notification.urls')),
     path('roles/', RoleListCreateView.as_view(), name='role-list-create'),
     path('roles/<int:pk>/', RoleDetailView.as_view(), name='role-detail'),
+    path('contact/', ContactMessageListCreateView.as_view(), name='contact-list-create'),
+    path('contact-email/', ContactEmailView.as_view(), name='contact-email'),
 ]
