@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import InviteTmpToken, Relative, RelationshipCatalog, SupportAgent
+from .models import InviteTmpToken, Relative, RelationshipCatalog, SupportAgent, PartnerType, PartnershipEnquery
 
 from api.models import CityCatalog
 
@@ -27,4 +27,14 @@ class RelationshipCatalogAdmin(admin.ModelAdmin):
 
 @admin.register(SupportAgent)
 class SupportAgentAdmin(admin.ModelAdmin):
+    pass
+
+
+@admin.register(PartnerType)
+class PartnerTypeAdmin(admin.ModelAdmin):
+    pass
+
+
+@admin.register(PartnershipEnquery)
+class PartnershipEnqueryAdmin(admin.ModelAdmin):
     pass

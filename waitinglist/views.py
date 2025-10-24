@@ -1,46 +1,30 @@
-from waitinglist.models import WaitingList
+from waitinglist.models import WaitingList, RejectionReason
 from nsocial.models import CustomUser
-from waitinglist.serializers import WaitingListSerializer, ExistingUserSerializer
+from waitinglist.serializers import (
+    WaitingListSerializer,
+    RejectWaitingListSerializer,
+    WaitingListAdminListSerializer,
+    RejectionReasonSerializer,
+    ExistingUserSerializer
+)
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from api.paginations import CustomPagination
+from django.db import transaction
 from notification.models import Notification
 from rest_framework.permissions import AllowAny
 import uuid
-from rest_framework import status, generics
+from nsocial.models import Role
+from rest_framework import status, generics, viewsets
+from rest_framework.decorators import action
 from djangorestframework_camel_case.parser import CamelCaseJSONParser
 from django.core.mail import send_mail
 from django.conf import settings
-from django.contrib.auth import get_user_model
-from api.models import InviteTmpToken
-from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.contenttypes.models import ContentType
+from moderation.views import IsAdminRole
+from rest_framework.views import APIView
+from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth import get_user_model
 
-# class WaitingListView(APIView):
-#     pagination_class = CustomPagination
-#     serializer_class = WaitingListSerializer
-#     permission_classes = [AllowAny]
-#
-#     def get(self, request, format=None):
-#         waitinglist = WaitingList.objects.all().filter(status_waiting_list=0)
-#         serializer = WaitingListSerializer(waitinglist, many=True)
-#         return Response(serializer.data)
-#
-#     def post(self, request):
-#         serializer = WaitingListSerializer(data=request.data)
-#         if serializer.is_valid():
-#             user = get_user_model()
-#             new_user = user.objects.create(email=serializer.validated_data["email"],
-#                                         first_name=serializer.validated_data["first_name"],
-#                                         last_name=serializer.validated_data["last_name"],
-#                                         is_active=False)
-#             new_user.set_password('secret')
-#             serializer.save()
-#
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class WaitingListView(generics.ListCreateAPIView):
-    pagination_class = CustomPagination
     queryset = WaitingList.objects.all()
     serializer_class = WaitingListSerializer
     permission_classes = [AllowAny]
@@ -61,7 +45,7 @@ class WaitingListView(generics.ListCreateAPIView):
                 Notification.objects.create(
                     recipient=admin,
                     actor=None,
-                    verb=f"{instance.first_name} {instance.last_name} se ha unido a la lista de espera", #
+                    verb=f"{instance.first_name} {instance.last_name} has joined the waiting list", #
                     target_content_type=waitinglist_content_type, #
                     target_object_id=instance.pk #
                 )
@@ -69,6 +53,248 @@ class WaitingListView(generics.ListCreateAPIView):
 
         except Exception as e:
             print(f"Error al intentar crear notificaciones para WaitingList: {e}")
+
+class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = WaitingList.objects.all().order_by('-id') # Corrected ordering field if needed
+    permission_classes = [IsAdminRole]
+    pagination_class = None
+
+    # Use get_serializer_class to select the serializer
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return WaitingListAdminListSerializer
+        if self.action == 'reject':
+            return RejectWaitingListSerializer
+        # For 'approve' or 'retrieve' (if enabled), use the basic one
+        return WaitingListSerializer
+
+    # Pass context for 'assigned' field in list view
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    # --- approve action logic ---
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def approve(self, request, pk=None):
+        waiting_entry = self.get_object()
+
+        if waiting_entry.status != WaitingList.STATUS_PENDING:
+            return Response({'error': 'This request has already been processed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if CustomUser.objects.filter(email=waiting_entry.email).exists():
+            waiting_entry.status = WaitingList.STATUS_REJECTED
+            waiting_entry.save()
+            return Response({'error': 'A user with this email already exists in the system.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Assuming Role ID 2 is 'FINAL USER'. Get the Role instance.
+        try:
+             # Make sure the Role model is imported: from nsocial.models import Role
+            default_role_instance = Role.objects.get(pk=2)
+        except Role.DoesNotExist:
+             return Response({'error': 'Default role (ID=2) not found.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+        user = CustomUser.objects.create_user(
+            email=waiting_entry.email,
+            password=None,
+            first_name=waiting_entry.first_name,
+            last_name=waiting_entry.last_name,
+            is_active=False,
+            role=default_role_instance # Assign the Role instance
+        )
+
+        token_uuid = uuid.uuid4()
+        token = token_uuid.hex
+
+        current_site = settings.CURRENT_SITE # Assuming CURRENT_SITE is defined in settings
+        # Construct URL based on frontend needs, using the actual token
+        abslink = f'{current_site}/activate-account/{token}/{user.first_name}/' # Example structure
+
+        subject = 'You have been accepted into Nobilis!'
+        message = (
+            f"Hello {user.first_name},\n\n"
+            f"Congratulations! Your application to join Nobilis has been approved.\n\n"
+            f"To activate your account and set your password, please click the following link:\n"
+            f"{abslink}\n\n"
+            f"Welcome to the community!\n\n"
+            f"Greetings,\nThe Nobilis Team"
+        )
+        try:
+            # Make sure ADMIN_USER_EMAIL is defined in settings
+            send_mail(subject, message, settings.ADMIN_USER_EMAIL, [user.email])
+        except Exception as e:
+            print(f"Error sending activation email to {user.email}: {e}")
+            # Consider transaction rollback or specific error handling
+            return Response({'error': 'User created but activation email failed to send.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        waiting_entry.status = WaitingList.STATUS_APPROVED
+        waiting_entry.save()
+
+        return Response({'success': f'User {user.email} approved and activation email sent.'}, status=status.HTTP_200_OK)
+
+    # --- reject action logic ---
+    @action(detail=True, methods=['post'], serializer_class=RejectWaitingListSerializer)
+    def reject(self, request, pk=None):
+        waiting_entry = self.get_object()
+
+        if waiting_entry.status != WaitingList.STATUS_PENDING:
+            return Response({'error': 'This request has already been processed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        reason = serializer.validated_data['rejection_reason']
+        # notes = serializer.validated_data['notes'] # If you add 'notes' back
+
+        waiting_entry.status = WaitingList.STATUS_REJECTED
+        waiting_entry.rejection_reason = reason
+        # waiting_entry.notes = notes # If you add 'notes' back
+        waiting_entry.save()
+
+        subject = 'Update on your application at Nobilis'
+        message = (
+            f"Hello {waiting_entry.first_name}\n\n"
+            f"Unfortunately, we have rejected your request to join Nobilis.\n\n"
+            # Optional: Include reason f"Reason: {reason}\n\n"
+            f"Greetings,\nThe Nobilis Team"
+        )
+        try:
+            # Make sure ADMIN_USER_EMAIL is defined in settings
+            send_mail(subject, message, settings.ADMIN_USER_EMAIL, [waiting_entry.email])
+        except Exception as e:
+             print(f"Error sending rejection email to {waiting_entry.email}: {e}")
+             # Decide if this error should affect the response
+
+        return Response({'success': f'Request for {waiting_entry.email} rejected.'}, status=status.HTTP_200_OK)
+
+
+# class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
+#     queryset = WaitingList.objects.all().order_by('-created_at')
+#     permission_classes = [IsAdminRole]
+#
+#     def get_serializer_class(self):
+#         if self.action == 'list':
+#             return WaitingListAdminListSerializer # Usa el nuevo para GET /admin/
+#         if self.action == 'reject':
+#             return RejectWaitingListSerializer # Usa el de rechazo para la acción reject
+#         # Para otras acciones como 'retrieve' (si la habilitas) o 'approve',
+#         # puedes usar el original o ninguno si no devuelven datos complejos.
+#         return WaitingListSerializer # Serializer por defecto para retrieve, etc.
+#
+#     # --- ASEGURA PASAR EL CONTEXTO AL SERIALIZER ---
+#     # Es necesario para que get_assigned funcione
+#     def get_serializer_context(self):
+#         """
+#         Añade el objeto request al contexto del serializer.
+#         """
+#         context = super().get_serializer_context()
+#         context['request'] = self.request
+#         return context
+#
+#     # ... (acciones 'approve' y 'reject' existentes) ...
+#     @action(detail=True, methods=['post'])
+#     @transaction.atomic
+#     def approve(self, request, pk=None):
+#         # ... (código existente de approve) ...
+#         pass # Solo para estructura
+#
+#     @action(detail=True, methods=['post'], serializer_class=RejectWaitingListSerializer)
+#     def reject(self, request, pk=None):
+#          # ... (código existente de reject) ...
+#         pass # Solo para estructura
+#
+#
+# class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
+#     queryset = WaitingList.objects.all().order_by('-created_at')
+#     serializer_class = WaitingListSerializer
+#     permission_classes = [IsAdminRole] # Solo Admins
+#
+#     @action(detail=True, methods=['post'])
+#     @transaction.atomic
+#     def approve(self, request, pk=None):
+#         waiting_entry = self.get_object()
+#
+#         if waiting_entry.status != WaitingList.STATUS_PENDING:
+#             return Response({'error': 'This request has already been processed.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         if CustomUser.objects.filter(email=waiting_entry.email).exists():
+#             waiting_entry.status = WaitingList.STATUS_REJECTED
+#             waiting_entry.save()
+#             return Response({'error': 'A user with this email already exists in the system.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         default_role = 2 #FINAL USER
+#
+#         user = CustomUser.objects.create_user(
+#             email=waiting_entry.email,
+#             password=None,
+#             first_name=waiting_entry.first_name,
+#             last_name=waiting_entry.last_name,
+#             is_active=False,
+#             role=default_role
+#         )
+#
+#         token_uuid = uuid.uuid4()
+#         token = token_uuid.hex
+#         invite = InviteTmpToken(user_email=user.email, user_token=token, user_id=user.id)
+#         invite.save()
+#         current_site = settings.CURRENT_SITE
+#         abslink = '{}/activate-account/{}/{}/'.format(current_site, token, user.first_name)
+#
+#         # 6. Enviar correo de invitación/activación
+#         subject = 'You have been accepted into Nobilis!'
+#         message = (
+#             f"Hello {user.first_name},\n\n"
+#             f"Congratulations! Your application to join Nobilis has been approved.\n\n"
+#             f"To activate your account and set your password, please click the following link:\n"
+#             f"{abslink}\n\n"
+#             f"Welcome to the community!\n\n"
+#             f"Greetings,\nThe Nobilis Team"
+#         )
+#         try:
+#             send_mail(subject, message, settings.ADMIN_USER_EMAIL, [user.email])
+#         except Exception as e:
+#             print(f"Error al enviar email de activación a {user.email}: {e}")
+#             # Considera si quieres revertir la transacción aquí o solo loggear
+#             return Response({'error': 'User created but activation email failed to send.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#
+#         # 7. Actualizar estado en WaitingList
+#         waiting_entry.status = WaitingList.STATUS_APPROVED
+#         waiting_entry.save()
+#
+#         return Response({'success': f'User {user.email} approved and activation email sent.'}, status=status.HTTP_200_OK)
+#
+#     @action(detail=True, methods=['post'], serializer_class=RejectWaitingListSerializer)
+#     def reject(self, request, pk=None):
+#         waiting_entry = self.get_object()
+#
+#         # 1. Validar estado
+#         if waiting_entry.status != WaitingList.STATUS_PENDING:
+#             return Response({'error': 'This request has already been processed.'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         serializer = self.get_serializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+#         reason = serializer.validated_data['rejection_reason']
+#         notes = serializer.validated_data['notes']
+#
+#         # 2. Actualizar estado
+#         waiting_entry.status = WaitingList.STATUS_REJECTED
+#         waiting_entry.rejection_reason = reason
+#         waiting_entry.notes = notes
+#         waiting_entry.save()
+#
+#         # (Opcional) Enviar correo de rechazo
+#         subject = 'Update on your application at Nobilis'
+#         message = (
+#             f"Hello {waiting_entry.first_name}\n\n"
+#             f"Unfortunately, we have rejected your request to join Nobilis.\n\n"
+#
+#             f"Greetings,\nThe Nobilis Team"
+#         )
+#         send_mail(subject, message, settings.ADMIN_USER_EMAIL, [waiting_entry.email])
+#
+#         return Response({'success': f'Request for {waiting_entry.email} rejected.'}, status=status.HTTP_200_OK)
+
 
 
 class WaitingListDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -78,62 +304,20 @@ class WaitingListDetailView(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "pk"
 
 
-class WaitingListInviteView(APIView):
-    #permission_classes = [IsAuthenticated]
+class RejectionReasonListView(generics.ListAPIView):
+    queryset = RejectionReason.objects.all()
+    serializer_class = RejectionReasonSerializer
+    permission_classes = [AllowAny]
 
-    def put(self, request, pk):
-        waitinglist = WaitingList.objects.get(pk=pk)
-        if waitinglist:
-            user = get_user_model()
-            reciber_email = waitinglist.email
-            waitinglist.status_waiting_list = 1
-            waitinglist.save(update_fields=['status_waiting_list'])
-            new_user = user.objects.get(email=reciber_email)
-            if not new_user.is_active:
-                token_uuid = uuid.uuid4()
-                token = token_uuid.hex #RefreshToken.for_user(new_user)
-                invite = InviteTmpToken(user_email=reciber_email, user_token=token, user_id=new_user.id)
-                invite.save()
-                current_site = 'https://main.d1rykkcgalxqn2.amplifyapp.com/auth'
-                abslink = '{}/activate-account/{}/{}/'.format(current_site, token, new_user.first_name)
-                subject = "Nobilis Invitation"
-                message = f"""
-                    You're invited! :)
-                    
-                    {abslink}
-                """
-                from_email = settings.EMAIL_HOST_USER
-
-                send_mail(subject=subject, 
-                        message=message, 
-                        from_email=from_email, 
-                        recipient_list=[reciber_email], 
-                        fail_silently=False,
-                        )
-                return Response({
-                    'success': True,
-                    'message': 'email was send'
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({
-                    'successs': False,
-                    'message': 'user alredy active'
-                }, status=status.HTTP_303_SEE_OTHER)
-        else:
-            return Response({
-                'success': False,
-                'message': 'email was not send'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
 
 class UserExistsView(APIView):
     serializer_class = ExistingUserSerializer
-    permission_classes = [AllowAny]    
+    permission_classes = [AllowAny]
 
     def post(self, request):
         waitinglist = WaitingList.objects.all()
         serializer = ExistingUserSerializer(data=request.data)
-        if serializer.is_valid(): 
+        if serializer.is_valid():
             try:
                 user = waitinglist.get(email=serializer.validated_data["email"])
                 if user:

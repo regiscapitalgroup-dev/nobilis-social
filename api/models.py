@@ -178,3 +178,36 @@ class ContactEmail(models.Model):
     class Meta:
         verbose_name = 'Correo de Contacto'
         verbose_name_plural = 'Correos de Contacto'
+
+
+
+class PartnerType(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = 'Partner Type'
+        verbose_name_plural = 'Partner Types'
+        ordering = ['name']
+
+
+class PartnershipEnquery(models.Model):
+    partner_type = models.CharField(max_length=100, verbose_name='Tipo de Partnership')
+    full_name = models.CharField(max_length=100, verbose_name='Nombre Completo')
+    email = models.EmailField(verbose_name='Correo Electrónico')
+    company_name = models.CharField(max_length=100, verbose_name='Nombre de la Empresa')
+    message = models.TextField(verbose_name='Mensaje')
+
+    created_at = models.DateTimeField(default=timezone.now, verbose_name='Fecha de Envío')
+    is_read = models.BooleanField(default=False, verbose_name='Leído') # Útil para gestión
+
+    def __str__(self):
+        return f"Consulta de {self.full_name} ({self.email})"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Partnership Enquiry'
+        verbose_name_plural = 'Partnership Enquiries'

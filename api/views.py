@@ -15,7 +15,9 @@ from .models import (
     ClubCatalog,
     RateExpertise,
     ContactMessage,
-    ContactEmail
+    ContactEmail,
+    PartnerType,
+    PartnershipEnquery
 )
 from .serializers import (
     CityListSerializer,
@@ -33,9 +35,11 @@ from .serializers import (
     ClubCatalogSerializer,
     InviteUserSerializer,
     ContactMessageSerializer,
-    ContactEmailSerializer
+    ContactEmailSerializer,
+    PartnerTypeSerializer,
+    PartnerEnquerySerializer
 )
-from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail, Role, CustomUser
+from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail, CustomUser
 from moderation.models import (
     TeamMembership, Team, ModeratorInvitation, ModeratorProfile
 )
@@ -350,3 +354,15 @@ class ContactEmailView(APIView):
                 {"error": "No se ha configurado un correo de contacto."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class PartnerTypeListView(generics.ListAPIView):
+    queryset = PartnerType.objects.all()
+    serializer_class = PartnerTypeSerializer
+    permission_classes = [permissions.AllowAny]
+
+
+class PartnerEnqueryCreateView(generics.CreateAPIView):
+    queryset = PartnershipEnquery.objects.all()
+    serializer_class = PartnerEnquerySerializer
+    permission_classes = [permissions.AllowAny]

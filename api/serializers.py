@@ -9,7 +9,9 @@ from .models import (
     ProfessionalInterestCatalog,
     HobbyCatalog,
     ClubCatalog,
-    ContactEmail
+    ContactEmail,
+    PartnershipEnquery,
+    PartnerType
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from nsocial.models import UserProfile, CustomUser, Role
@@ -130,9 +132,6 @@ class TokenWithSubscriptionSerializer(TokenObtainPairSerializer):
 
 
 class InviteUserSerializer(serializers.Serializer):
-    """
-    Serializer para validar los datos al invitar a un nuevo usuario.
-    """
     email = serializers.EmailField()
     first_name = serializers.CharField(max_length=30)
     last_name = serializers.CharField(max_length=30)
@@ -168,3 +167,17 @@ class ContactEmailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactEmail
         fields = ['email']
+
+
+class PartnerTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PartnerType
+        fields = ['id', 'name']
+        read_only_fields = ['id']
+
+
+class PartnerEnquerySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PartnershipEnquery
+        fields = ['id', 'partner_type', 'full_name', 'email', 'message', 'created_at', 'is_read']
+        read_only_fields = ['id', 'created_at', 'is_read']

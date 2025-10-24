@@ -303,4 +303,4 @@ AWS_STORAGE_BUCKET_NAME=config("AWS_STORAGE_BUCKET_NAME", cast=str, default=None
 AWS_S3_CUSTOM_DOMAIN= "%s.s3.amazonaws.com" % AWS_STORAGE_BUCKET_NAME
 AWS_S3_FILE_OVERWRITE = False
 
-
+CURRENT_SITE = config("CURRENT_SITE", cast=str, default=None)

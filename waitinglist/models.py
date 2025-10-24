@@ -2,11 +2,18 @@ from django.db import models
 from django.utils import timezone
 
 class WaitingList(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
     # screen 1
     first_name = models.CharField(max_length=100, null=False, blank=False, verbose_name="Name")
     last_name = models.CharField(max_length=150, null=False, blank=False, verbose_name="Last Name")
     phone_number = models.CharField(max_length=20, null=True, blank=True, verbose_name="Phone Number")
-    #phone_number = EncryptedCharField(null=False, blank=False, verbose_name="Phone Number")
     email = models.EmailField(max_length=255, null=False, blank=False, verbose_name="E-mail") 
     occupation = models.CharField(max_length=60, null=True, blank=True, verbose_name="Occupation")
     city = models.CharField(max_length=255, null=True, blank=True, verbose_name="Country")
@@ -33,7 +40,19 @@ class WaitingList(models.Model):
     income_range = models.CharField(max_length=50, null=True, blank=True, verbose_name="Income Range")
     # status 
     created_at = models.DateField(auto_now_add=True, verbose_name="Created at")
-    status_waiting_list = models.IntegerField(default=0, verbose_name="Status Waiting List")
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name='Status'
+    )
+    rejection_reason = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Reject Reason'
+    )
+    notes = models.CharField(max_length=100, null=True, blank=True, verbose_name="Notes")
+
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -42,3 +61,15 @@ class WaitingList(models.Model):
         verbose_name = "Waiting List"
         verbose_name_plural = "Waiting Lists"
         ordering = ['-created_at']
+
+
+class RejectionReason(models.Model):
+    reason = models.CharField(max_length=150, verbose_name="Reason")
+
+    def __str__(self):
+        return self.reason
+
+    class Meta:
+        verbose_name = "Rejection Reason"
+        verbose_name_plural = "Rejection Reasons"
+
