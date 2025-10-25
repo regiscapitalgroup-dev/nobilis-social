@@ -13,11 +13,12 @@ class WaitingListSerializer(serializers.ModelSerializer):
 
 
 class RejectWaitingListSerializer(serializers.Serializer):
-    rejection_reason = serializers.CharField(
-        max_length=100,
-        required=False,
-        allow_blank=True,
-        help_text="Motivo por el cual se rechaza la solicitud."
+    rejection_reason_id = serializers.PrimaryKeyRelatedField(
+        queryset=RejectionReason.objects.all(),  # Busca en el catálogo
+        allow_null=False,
+        required=True,
+        source='rejection_reason',  # Guarda el objeto RejectionReason en validated_data['rejection_reason']
+        help_text="ID del motivo de rechazo del catálogo RejectionReason."
     )
     notes = serializers.CharField(
         max_length=100,

@@ -176,8 +176,21 @@ class PartnerTypeSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class PartnerEnquerySerializer(serializers.ModelSerializer):
+class PartnershipEnquerySerializer(serializers.ModelSerializer):
+    partner_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=PartnerType.objects.all(),
+        source='partner_type', # Guarda el objeto PartnerType en validated_data['partner_type']
+        write_only=True # Solo para la entrada (POST)
+    )
+    # Campo para mostrar el nombre del PartnerType en la salida (si se necesitara GET)
+    partner_type_name = serializers.CharField(source='partner_type.name', read_only=True)
+
     class Meta:
         model = PartnershipEnquery
-        fields = ['id', 'partner_type', 'full_name', 'email', 'message', 'created_at', 'is_read']
-        read_only_fields = ['id', 'created_at', 'is_read']
+        # Incluye los campos necesarios para crear y los de solo lectura para la respuesta
+        fields = [
+            'id', 'partner_type_id', 'partner_type_name', 'full_name',
+            'email', 'company_name', 'message', 'created_at', 'is_read'
+        ]
+        # Campos que no se envían en el POST, solo se devuelven en la respuesta
+        read_only_fields = ['id', 'partner_type_name', 'created_at', 'is_read']

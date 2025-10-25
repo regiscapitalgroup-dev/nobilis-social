@@ -46,11 +46,7 @@ class WaitingList(models.Model):
         default=STATUS_PENDING,
         verbose_name='Status'
     )
-    rejection_reason = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Reject Reason'
-    )
+    rejection_reason = models.ForeignKey('RejectionReason', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Rejection Reason")
     notes = models.CharField(max_length=100, null=True, blank=True, verbose_name="Notes")
 
 
@@ -64,6 +60,7 @@ class WaitingList(models.Model):
 
 
 class RejectionReason(models.Model):
+    id = models.AutoField(primary_key=True)
     reason = models.CharField(max_length=150, verbose_name="Reason")
 
     def __str__(self):

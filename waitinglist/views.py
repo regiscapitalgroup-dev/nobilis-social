@@ -313,6 +313,7 @@ class RejectionReasonListView(generics.ListAPIView):
     permission_classes = [AllowAny]
 
 
+
 class UserExistsView(APIView):
     serializer_class = ExistingUserSerializer
     permission_classes = [AllowAny]

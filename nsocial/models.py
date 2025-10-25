@@ -65,7 +65,7 @@ class UserProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     introduction_headline = models.TextField(max_length=220, null=True, blank=True)
     alias_title = models.CharField(max_length=50, null=True, blank=True)
-    profile_picture = models.ImageField(default='default.jpg', upload_to='profile_pics', null=True, blank=True,
+    profile_picture = models.ImageField(default='profile_pics/default.jpg', upload_to='profile_pics', null=True, blank=True,
                                         validators=[validate_image_size])
     birthday = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=25, null=True, blank=True)

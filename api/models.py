@@ -195,7 +195,7 @@ class PartnerType(models.Model):
 
 
 class PartnershipEnquery(models.Model):
-    partner_type = models.CharField(max_length=100, verbose_name='Tipo de Partnership')
+    partner_type = models.ForeignKey('PartnerType', on_delete=models.PROTECT, related_name='enqueries')
     full_name = models.CharField(max_length=100, verbose_name='Nombre Completo')
     email = models.EmailField(verbose_name='Correo Electrónico')
     company_name = models.CharField(max_length=100, verbose_name='Nombre de la Empresa')

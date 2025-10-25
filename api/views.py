@@ -37,7 +37,7 @@ from .serializers import (
     ContactMessageSerializer,
     ContactEmailSerializer,
     PartnerTypeSerializer,
-    PartnerEnquerySerializer
+    PartnershipEnquerySerializer
 )
 from nsocial.models import ProfessionalProfile, UserProfile, PersonalDetail, CustomUser
 from moderation.models import (
@@ -362,7 +362,7 @@ class PartnerTypeListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
 
 
-class PartnerEnqueryCreateView(generics.CreateAPIView):
+class PartnershipEnqueryCreateView(generics.CreateAPIView):
     queryset = PartnershipEnquery.objects.all()
-    serializer_class = PartnerEnquerySerializer
+    serializer_class = PartnershipEnquerySerializer
     permission_classes = [permissions.AllowAny]

@@ -40,7 +40,9 @@ from api.views import (
     RateExpertiseView,
     InviteUserView,
     ContactMessageListCreateView,
-    ContactEmailView, PartnerTypeListView
+    ContactEmailView,
+    PartnerTypeListView,
+    PartnershipEnqueryCreateView
 )
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -104,4 +106,5 @@ urlpatterns = [
     path('contact/', ContactMessageListCreateView.as_view(), name='contact-list-create'),
     path('contact-email/', ContactEmailView.as_view(), name='contact-email'),
     path('partner-types/', PartnerTypeListView.as_view(), name='partner-type-list'),
+    path('partnership-enquiry/', PartnershipEnqueryCreateView.as_view(), name='partnership-enquiry-create'),
 ]
