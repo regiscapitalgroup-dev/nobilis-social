@@ -23,8 +23,10 @@ from moderation.views import IsAdminRole
 from rest_framework.views import APIView
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 class WaitingListView(generics.ListCreateAPIView):
+    throttle_classes = [AnonRateThrottle]
     queryset = WaitingList.objects.all()
     serializer_class = WaitingListSerializer
     permission_classes = [AllowAny]
@@ -55,6 +57,7 @@ class WaitingListView(generics.ListCreateAPIView):
             print(f"Error al intentar crear notificaciones para WaitingList: {e}")
 
 class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    throttle_classes = [UserRateThrottle]
     queryset = WaitingList.objects.all().order_by('-id') # Corrected ordering field if needed
     permission_classes = [IsAdminRole]
     pagination_class = None
