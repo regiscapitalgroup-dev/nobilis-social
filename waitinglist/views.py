@@ -22,7 +22,7 @@ from django.contrib.contenttypes.models import ContentType
 from moderation.views import IsAdminRole
 from rest_framework.views import APIView
 from django.core.exceptions import ObjectDoesNotExist
-from django.contrib.auth import get_user_model
+from api.models import InviteTmpToken
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 class WaitingListView(generics.ListCreateAPIView):
@@ -110,7 +110,8 @@ class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
 
         token_uuid = uuid.uuid4()
         token = token_uuid.hex
-
+        invite = InviteTmpToken(user_email=user.email, user_token=token, user_id=user.id)
+        invite.save()
         current_site = settings.CURRENT_SITE # Assuming CURRENT_SITE is defined in settings
         # Construct URL based on frontend needs, using the actual token
         abslink = f'{current_site}/activate-account/{token}/{user.first_name}/' # Example structure

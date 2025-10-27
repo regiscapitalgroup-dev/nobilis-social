@@ -16,7 +16,8 @@ from nsocial.models import (
     UserVideo,
     Experience,
     Author,
-    Role
+    Role,
+    UserIntroductionPreference
 )
 import stripe
 import logging
@@ -213,6 +214,7 @@ class FullProfileSerializer(UserProfileSerializer):
     subscription = serializers.SerializerMethodField()
     current_subscription = MembershipSubscriptionSerializer(read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    introduction = serializers.SerializerMethodField(read_only=True)
 
     class Meta(UserProfileSerializer.Meta):
         model = UserProfile
@@ -222,8 +224,24 @@ class FullProfileSerializer(UserProfileSerializer):
             # Admin-only fields now included in FullProfile
             'guiding_principle', 'postal_address', 'often_in', 'life_partner_name', 'life_partner_lastname',
             'annual_limits_introduction', 'receive_reports', 'relatives',
-            'email'
+            'email', 'introduction'
         ]
+
+    def get_introduction(self, obj):
+        try:
+            # Busca la preferencia a través de la relación 'introduction_preference'
+            pref = getattr(obj, 'introduction_preference', None)  #
+            if not pref:
+                return None
+            # Obtiene el objeto IntroductionCatalog relacionado
+            intro = getattr(pref, 'introduction_type', None)  #
+            return {
+                'id': getattr(intro, 'id', None),
+                'title': getattr(intro, 'title', None)  # Usa 'title' según tu corrección anterior
+            }
+        except Exception:
+            # En caso de cualquier error (ej. relaciones rotas), devuelve None
+            return None
 
     def get_subscription(self, obj: UserProfile):
 
@@ -504,7 +522,7 @@ class AdminProfileBasicSerializer(serializers.ModelSerializer):
             intro = getattr(pref, 'introduction_type', None)
             return {
                 'id': getattr(intro, 'id', None),
-                'name': getattr(intro, 'name', None)
+                'title': getattr(intro, 'title', None)
             }
         except Exception:
             return None
