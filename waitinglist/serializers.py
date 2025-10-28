@@ -14,10 +14,10 @@ class WaitingListSerializer(serializers.ModelSerializer):
 
 class RejectWaitingListSerializer(serializers.Serializer):
     rejection_reason_id = serializers.PrimaryKeyRelatedField(
-        queryset=RejectionReason.objects.all(),  # Busca en el catálogo
+        queryset=RejectionReason.objects.all(),
         allow_null=False,
         required=True,
-        source='rejection_reason',  # Guarda el objeto RejectionReason en validated_data['rejection_reason']
+        source='rejection_reason',
         help_text="ID del motivo de rechazo del catálogo RejectionReason."
     )
     notes = serializers.CharField(
@@ -33,24 +33,14 @@ class ExistingUserSerializer(serializers.Serializer):
 
 
 class SafeDateTimeField(serializers.DateTimeField):
-    """
-    Un DateTimeField que maneja de forma segura objetos 'date'
-    convirtiéndolos a datetime al inicio del día.
-    """
-
     def to_representation(self, value):
-        # Si es un objeto 'date' pero NO 'datetime'...
         if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
-            # ...convierte a datetime (medianoche) y hazlo timezone-aware si es necesario
             value = datetime.datetime.combine(value, datetime.time.min)
             if settings.USE_TZ:
                 value = timezone.make_aware(value)
-        # Si ya es un datetime pero 'naive' (sin timezone) y USE_TZ es True...
         elif isinstance(value, datetime.datetime) and settings.USE_TZ and timezone.is_naive(value):
-            # ...hazlo aware usando la timezone por defecto
             value = timezone.make_aware(value)
 
-        # Procede con la representación estándar de DateTimeField
         return super().to_representation(value)
 
 

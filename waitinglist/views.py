@@ -31,11 +31,39 @@ class WaitingListView(generics.ListCreateAPIView):
     serializer_class = WaitingListSerializer
     permission_classes = [AllowAny]
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data.get('email')
+
+        # Busca si ya existe una entrada APROBADA con este email
+        # Usamos la constante del modelo WaitingList
+        already_approved = WaitingList.objects.filter(
+            email=email,
+            status=WaitingList.STATUS_APPROVED  # Usa la constante del modelo
+        ).exists()
+
+        if already_approved:
+            # Si ya existe y está aprobada, devuelve un error 409 Conflict
+            return Response(
+                {"error": "This email has already been registered and approved."},
+                status=status.HTTP_409_CONFLICT
+            )
+
+        # Si no existe una entrada aprobada, procede a crear la nueva entrada
+        # Llama a perform_create para guardar y notificar (como ya lo hacía)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    # perform_create ahora solo guarda y notifica (ya no necesita validar)
     def perform_create(self, serializer):
         instance = serializer.save()
 
+        # Lógica de notificación a administradores (sin cambios)
         try:
-            admin_users = list(CustomUser.objects.filter(role__is_admin=True))
+            admin_users = list(CustomUser.objects.filter(role__is_admin=True))  #
 
             if not admin_users:
                 print("Advertencia: No se encontraron usuarios administradores para notificar.")
@@ -47,14 +75,39 @@ class WaitingListView(generics.ListCreateAPIView):
                 Notification.objects.create(
                     recipient=admin,
                     actor=None,
-                    verb=f"{instance.first_name} {instance.last_name} has joined the waiting list", #
-                    target_content_type=waitinglist_content_type, #
-                    target_object_id=instance.pk #
-                )
+                    verb=f"{instance.first_name} {instance.last_name} has joined the waiting list",
+                    target_content_type=waitinglist_content_type,
+                    target_object_id=instance.pk
+                )  #
             print(f"Notificaciones enviadas a {len(admin_users)} administradores.")
 
         except Exception as e:
             print(f"Error al intentar crear notificaciones para WaitingList: {e}")
+
+    # def perform_create(self, serializer):
+    #     instance = serializer.save()
+    #
+    #     try:
+    #         admin_users = list(CustomUser.objects.filter(role__is_admin=True))
+    #
+    #         if not admin_users:
+    #             print("Advertencia: No se encontraron usuarios administradores para notificar.")
+    #             return
+    #
+    #         waitinglist_content_type = ContentType.objects.get_for_model(instance)
+    #
+    #         for admin in admin_users:
+    #             Notification.objects.create(
+    #                 recipient=admin,
+    #                 actor=None,
+    #                 verb=f"{instance.first_name} {instance.last_name} has joined the waiting list", #
+    #                 target_content_type=waitinglist_content_type, #
+    #                 target_object_id=instance.pk #
+    #             )
+    #         print(f"Notificaciones enviadas a {len(admin_users)} administradores.")
+    #
+    #     except Exception as e:
+    #         print(f"Error al intentar crear notificaciones para WaitingList: {e}")
 
 class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
     throttle_classes = [UserRateThrottle]
@@ -149,11 +202,11 @@ class WaitingListAdminViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         reason = serializer.validated_data['rejection_reason']
-        # notes = serializer.validated_data['notes'] # If you add 'notes' back
+        notes = serializer.validated_data['notes'] # If you add 'notes' back
 
         waiting_entry.status = WaitingList.STATUS_REJECTED
         waiting_entry.rejection_reason = reason
-        # waiting_entry.notes = notes # If you add 'notes' back
+        waiting_entry.notes = notes # If you add 'notes' back
         waiting_entry.save()
 
         subject = 'Update on your application at Nobilis'
@@ -324,16 +377,16 @@ class UserExistsView(APIView):
         serializer = ExistingUserSerializer(data=request.data)
         if serializer.is_valid():
             try:
-                user = waitinglist.get(email=serializer.validated_data["email"])
+                user = waitinglist.get(email=serializer.validated_data["email"], status=WaitingList.STATUS_APPROVED)
                 if user:
                     return Response({
                         'success': False,
-                        'message': 'user already exists.'
+                        'message': 'User already exists.'
                     }, status=status.HTTP_409_CONFLICT)
             except ObjectDoesNotExist:
                 return Response({
                     'success': False,
-                    'message':'user does not exist'
+                    'message':'User does not exist'
                 }, status=status.HTTP_200_OK)
         return Response({
             'success': False,
