@@ -29,6 +29,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 
 
 class RegisterView(generics.CreateAPIView):

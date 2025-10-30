@@ -24,7 +24,7 @@ from rest_framework.views import APIView
 from django.core.exceptions import ObjectDoesNotExist
 from api.models import InviteTmpToken
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
-
+from rest_framework.permissions import IsAuthenticated
 class WaitingListView(generics.ListCreateAPIView):
     throttle_classes = [AnonRateThrottle]
     queryset = WaitingList.objects.all()
@@ -359,18 +359,22 @@ class WaitingListDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = WaitingListSerializer
     parser_classes = (CamelCaseJSONParser,)
     lookup_field = "pk"
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
 
 class RejectionReasonListView(generics.ListAPIView):
     queryset = RejectionReason.objects.all()
     serializer_class = RejectionReasonSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 
 class UserExistsView(APIView):
     serializer_class = ExistingUserSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def post(self, request):
         waitinglist = WaitingList.objects.all()

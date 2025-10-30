@@ -12,7 +12,8 @@ class InviteTmpTokenAdmin(admin.ModelAdmin):
 
 @admin.register(CityCatalog)
 class CityAdmin(admin.ModelAdmin):
-    pass
+    list_display = ('name', 'subcountry', 'country')
+    search_fields = ('name', 'subcountry', 'country')
 
 
 @admin.register(Relative)

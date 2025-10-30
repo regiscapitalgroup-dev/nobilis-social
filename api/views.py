@@ -48,6 +48,8 @@ from django.db import transaction
 from django.conf import settings
 from django.core.mail import send_mail
 from moderation.views import IsAdminRole
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+
 
 class TokenObtainPairWithSubscriptionView(TokenObtainPairView):
     serializer_class = TokenWithSubscriptionSerializer
@@ -56,10 +58,11 @@ class TokenObtainPairWithSubscriptionView(TokenObtainPairView):
 class CityListView(ListAPIView):
     queryset = CityCatalog.objects.all().order_by('name')
     serializer_class = CityListSerializer
-
     filter_backends = (SearchFilter,)
     search_fields = ('name',)
     pagination_class = None
+    permintion_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 class LanguageListView(ListAPIView):
@@ -68,6 +71,9 @@ class LanguageListView(ListAPIView):
 
     filter_backends = [SearchFilter]
     search_fields = ['name']
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 class RelationshipCatalogListView(ListAPIView):
@@ -75,11 +81,15 @@ class RelationshipCatalogListView(ListAPIView):
     serializer_class = RelationshipCatalogSerializer
     filter_backends = [SearchFilter]
     search_fields = ['name', 'description']
+    permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 class RelativeListCreateView(ListCreateAPIView):
     serializer_class = RelativeSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def get_queryset(self):
         user = self.request.user
@@ -95,6 +105,7 @@ class RelativeListCreateView(ListCreateAPIView):
 class RelativeDetailView(RetrieveUpdateDestroyAPIView):
     serializer_class = RelativeSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def get_queryset(self):
         user = self.request.user
@@ -109,21 +120,25 @@ class SupportAgentListView(ListAPIView):
     serializer_class = SupportAgentSerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 class SupportAgentDetailView(RetrieveAPIView):
     queryset = SupportAgent.objects.all()
     serializer_class = SupportAgentSerializer
     permission_classes = [permissions.AllowAny]
+    pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 class IndustryCatalogListView(ListAPIView):
     queryset = IndustryCatalog.objects.filter(active=True).order_by('name')
     serializer_class = IndustryCatalogSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
     filter_backends = [SearchFilter]
     search_fields = ['name']
     pagination_class = None
+    throttle_classes = [UserRateThrottle]
 
     def list(self, request, *args, **kwargs):
         # Use DRF filtering to respect search params, then return only the names as a plain array
@@ -139,6 +154,7 @@ class ProfessionalInterestCatalogListView(ListAPIView):
     filter_backends = [SearchFilter]
     search_fields = ['name']
     pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
 
 class HobbyCatalogListView(ListAPIView):
@@ -148,6 +164,7 @@ class HobbyCatalogListView(ListAPIView):
     filter_backends = [SearchFilter]
     search_fields = ['name']
     pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def list(self, request, *args, **kwargs):
         # Return only hobby names as a plain array of strings (with search applied)
@@ -163,6 +180,7 @@ class ClubCatalogListView(ListAPIView):
     filter_backends = [SearchFilter]
     search_fields = ['name', 'city']
     pagination_class = None
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def list(self, request, *args, **kwargs):
         # Return concatenated "name - city" for each active club (with search applied)
@@ -173,6 +191,7 @@ class ClubCatalogListView(ListAPIView):
 
 class UpdateProfileIndustriesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def put(self, request):
         serializer = ProfileIndustriesUpdateSerializer(data=request.data)
@@ -194,6 +213,7 @@ class UpdateProfileIndustriesView(APIView):
 
 class UpdateProfileInterestsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def put(self, request):
         serializer = ProfileInterestsUpdateSerializer(data=request.data)
@@ -213,6 +233,7 @@ class UpdateProfileInterestsView(APIView):
 
 class UpdateProfileHobbiesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def put(self, request):
         serializer = ProfileHobbiesUpdateSerializer(data=request.data)
@@ -233,6 +254,7 @@ class UpdateProfileHobbiesView(APIView):
 
 class HeltChechView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def get(self, request):
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
@@ -242,6 +264,7 @@ class RateExpertiseView(APIView):
     """GET-only endpoint that returns the available expertise rate types from the model."""
     permission_classes = [permissions.AllowAny]
     http_method_names = ['get']
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     def get(self, request):
         # Read from the model; if empty, provide sensible defaults without enforcing auth.
@@ -254,6 +277,7 @@ class RateExpertiseView(APIView):
 class InviteUserView(generics.GenericAPIView):
     serializer_class = InviteUserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     @transaction.atomic
     def post(self, request):
@@ -333,6 +357,8 @@ class InviteUserView(generics.GenericAPIView):
 class ContactMessageListCreateView(generics.ListCreateAPIView):
     queryset = ContactMessage.objects.all()
     serializer_class = ContactMessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
 
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -342,6 +368,7 @@ class ContactMessageListCreateView(generics.ListCreateAPIView):
 
 class ContactEmailView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]
 
     def get(self, request, *args, **kwargs):
         contact_email_obj = ContactEmail.objects.first()
@@ -360,9 +387,11 @@ class PartnerTypeListView(generics.ListAPIView):
     queryset = PartnerType.objects.all()
     serializer_class = PartnerTypeSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]
 
 
 class PartnershipEnqueryCreateView(generics.CreateAPIView):
     queryset = PartnershipEnquery.objects.all()
     serializer_class = PartnershipEnquerySerializer
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [AnonRateThrottle]

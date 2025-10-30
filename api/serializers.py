@@ -22,8 +22,8 @@ class CityListSerializer(serializers.BaseSerializer):
     def to_representation(self, instance):
         parts = [instance.name]
 
-        if instance.subcountry:
-            parts.append(instance.subcountry)
+        # if instance.subcountry:
+        #     parts.append(instance.subcountry)
 
         parts.append(instance.country)
 
