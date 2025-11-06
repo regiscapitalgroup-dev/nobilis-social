@@ -49,6 +49,8 @@ from django.conf import settings
 from django.core.mail import send_mail
 from moderation.views import IsAdminRole
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
+from django.http import HttpResponse
+from django.views import View
 
 
 class TokenObtainPairWithSubscriptionView(TokenObtainPairView):
@@ -252,12 +254,9 @@ class UpdateProfileHobbiesView(APIView):
         })
 
 
-class HeltChechView(APIView):
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [AnonRateThrottle, UserRateThrottle]
-
+class HeltChechView(View):
     def get(self, request):
-        return Response({"status": "ok"}, status=status.HTTP_200_OK)
+        return HttpResponse("OK", status=200)
 
 
 class RateExpertiseView(APIView):
@@ -270,7 +269,7 @@ class RateExpertiseView(APIView):
         # Read from the model; if empty, provide sensible defaults without enforcing auth.
         names = list(RateExpertise.objects.filter(active=True).order_by('name').values_list('name', flat=True))
         if not names:
-            names = ["hour", "project"]
+            names = ["hourly", "project", "under request"]
         return Response(names)
 
 

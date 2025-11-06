@@ -72,9 +72,9 @@ class ShippingAddress(models.Model):
     address = models.TextField(null=True, blank=True, verbose_name="Shipping Address")
     country = models.CharField(max_length=80, null=True, blank=True, verbose_name="Country")
     city = models.CharField(max_length=150, null=True, blank=True, verbose_name="City")
-    card_no = models.CharField(null=True, blank=True, verbose_name="Card Number")
-    card_type = models.CharField(null=True, blank=True, verbose_name="Card Type")
-    card_last_4 = models.CharField(null=True, blank=True, verbose_name="Card Last 4")
+    card_no = models.CharField(max_length=20, null=True, blank=True, verbose_name="Card Number")
+    card_type = models.CharField(max_length=10, null=True, blank=True, verbose_name="Card Type")
+    card_last_4 = models.CharField(max_length=5, null=True, blank=True, verbose_name="Card Last 4")
     same_billing_address = models.BooleanField(default=False, verbose_name="Billing Address is Same as shipping")
     billing_address = models.TextField(null=True, blank=True, verbose_name="Billing Address")
 

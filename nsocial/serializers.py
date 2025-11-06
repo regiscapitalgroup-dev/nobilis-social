@@ -46,9 +46,11 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
 
 class CurrentUserSerializer(serializers.ModelSerializer):
+    profile_picture = serializers.ImageField(source='profile.profile_picture', read_only=True)
+
     class Meta:
         model = CustomUser
-        fields =('first_name', 'last_name', 'email', 'id')
+        fields =('first_name', 'last_name', 'email', 'id', 'profile_picture')
 
 
 class SetNewPasswordSerializer(serializers.Serializer):
@@ -215,6 +217,8 @@ class FullProfileSerializer(UserProfileSerializer):
     current_subscription = MembershipSubscriptionSerializer(read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     introduction = serializers.SerializerMethodField(read_only=True)
+    first_name = serializers.CharField(source='user.first_name', required=False)
+    surname = serializers.CharField(source='user.last_name', required=False)
 
     class Meta(UserProfileSerializer.Meta):
         model = UserProfile
@@ -224,7 +228,7 @@ class FullProfileSerializer(UserProfileSerializer):
             # Admin-only fields now included in FullProfile
             'guiding_principle', 'postal_address', 'often_in', 'life_partner_name', 'life_partner_lastname',
             'annual_limits_introduction', 'receive_reports', 'relatives',
-            'email', 'introduction'
+            'email', 'introduction', 'first_name', 'surname',
         ]
 
     def get_introduction(self, obj):
@@ -235,13 +239,16 @@ class FullProfileSerializer(UserProfileSerializer):
                 return None
             # Obtiene el objeto IntroductionCatalog relacionado
             intro = getattr(pref, 'introduction_type', None)  #
-            return {
-                'id': getattr(intro, 'id', None),
-                'title': getattr(intro, 'title', None)  # Usa 'title' según tu corrección anterior
-            }
+            if intro and intro.title:
+                return [intro.title]
+            else:
+                return []
+            # return {
+            #     'id': getattr(intro, 'id', None),
+            #     'title': getattr(intro, 'title', None)  # Usa 'title' según tu corrección anterior
+            # }
         except Exception:
-            # En caso de cualquier error (ej. relaciones rotas), devuelve None
-            return None
+            return []
 
     def get_subscription(self, obj: UserProfile):
 

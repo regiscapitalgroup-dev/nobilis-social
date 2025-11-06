@@ -36,12 +36,14 @@ else:
         'localhost',
         '127.0.0.1',
         'api.joinnobilis.com',
-        'https://main.d1rykkcgalxqn2.amplifyapp.com',
+        'main.d1rykkcgalxqn2.amplifyapp.com',
+        'joinnobilis.com'
     ]
 
 CSRF_TRUSTED_ORIGINS = [
     'https://api.joinnobilis.com',
-    'https://main.d1rykkcgalxqn2.amplifyapp.com',
+    'https://joinnobilis.com',
+    'https://main.d1rykkcgalxqn2.amplifyapp.com'
 ]
 
 
@@ -73,7 +75,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    "corsheaders.middleware.CorsMiddleware",
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -255,6 +257,8 @@ CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", cast=bool, default=Tru
 
 CORS_ALLOWED_ORIGINS = [
     'https://main.d1rykkcgalxqn2.amplifyapp.com',
+    'https://joinnobilis.com',
+    'https://api.joinnobilis.com',
 ]
 
 from corsheaders.defaults import default_methods, default_headers

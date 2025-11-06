@@ -18,7 +18,7 @@ from nsocial.views import (
     ProfilePictureUpdateView,
     AdminProfileBiographyView,
     RecognitionUpdateView,
-    ExpertiseUpdateView
+    ExpertiseUpdateView, UserSearchView
  )
 from membership.views import AccountOverviewView
 from api.views import (
@@ -57,6 +57,7 @@ urlpatterns = [
     path('password-reset/', ForgotMyPassword.as_view(), name='password_reset'),
     path('reset-password/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),    
     path('activate-account/', SetNewPasswordView.as_view(), name='activate-account'),
+    path('users/search/', UserSearchView.as_view(), name='user-search'),
 
     # path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/', TokenObtainPairWithSubscriptionView.as_view(), name='token_obtain_pair'),

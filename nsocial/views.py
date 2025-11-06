@@ -14,7 +14,7 @@ from .serializers import (
     AdminProfileBiographySerializer,
 )
 from .models import CustomUser, UserProfile, SocialMediaProfile, Experience, Role, Recognition, Expertise
-from rest_framework import generics, status
+from rest_framework import generics, status, filters
 from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.response import Response
 import requests
@@ -567,3 +567,21 @@ class ExpertiseUpdateView(APIView):
 
     def patch(self, request):
         return self._update(request)
+
+
+class UserSearchView(generics.ListAPIView):
+    """
+    Endpoint para buscar usuarios por nombre, apellido o email.
+
+    Uso: GET /api/v1/users/search/?search=termino_buscado
+    """
+    # Solo buscamos entre usuarios activos
+    queryset = CustomUser.objects.filter(is_active=True)
+    serializer_class = CurrentUserSerializer  # Reutiliza el serializer simple de usuario
+    permission_classes = [IsAuthenticated]  # Solo usuarios autenticados pueden buscar
+
+    # --- Configuración del filtro ---
+    filter_backends = [filters.SearchFilter]
+    # Campos en los que se buscará (case-insensitive)
+    search_fields = ['first_name', 'last_name', 'email']
+
