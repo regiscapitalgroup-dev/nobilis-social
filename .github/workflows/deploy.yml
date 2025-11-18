@@ -1,0 +1,47 @@
+name: Deploy Django
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente a desplegar"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set environment variables dynamically
+        run: |
+          echo "EC2_HOST=${{ secrets.EC2_HOST }}" >> $GITHUB_ENV
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
+
+      - name: Upload project files
+        run: |
+          scp -r . ec2-user@$EC2_HOST:/home/ubuntu/app/
+
+      - name: Update .env on server
+        run: |
+          ssh ubuntu@$EC2_HOST "bash -s" << 'EOF'
+          cd /home/ubuntu/app
+          cat > .env << EOT
+          DEBUG=${DEBUG}
+          EOT
+          EOF
+        env:
+          DEBUG: ${{ variables.DEBUG }}
