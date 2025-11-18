@@ -44,4 +44,4 @@ jobs:
           EOT
           EOF
         env:
-          DEBUG: ${{ variables.DEBUG }}
+          DEBUG: ${{ vars.DEBUG }}
